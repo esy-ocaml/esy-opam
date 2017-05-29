@@ -18,6 +18,11 @@ opam/src/core/opamCompat.ml: opam/src/core/opamCompat.ml.4.02
 opam/src/core/opamCompat.mli: opam/src/core/opamCompat.mli.4.02
 	cp $(<) $(@)
 
+bootstrap:
+	git submodule init
+	git submodule update
+	npm install
+
 build: prepare
 	$(BIN)/bsb -clean-world -make-world
 
