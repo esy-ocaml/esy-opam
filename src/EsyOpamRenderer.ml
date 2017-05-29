@@ -1,5 +1,8 @@
+(* OPAM file converted to Esy format *)
 type result = {
+  (* list of (name, constraint) pairs *)
   dependencies: (OpamTypes.name * string) list;
+  (* list of expanded build commands *)
   build: string list;
 }
 
@@ -54,6 +57,7 @@ let render_opam_depends depends =
 let render_opam_build env (commands: OpamTypes.command list) =
   let render_args args =
     let args = List.map
+        (* XXX: We ignore filters for now *)
         (fun (arg, _filter) -> match arg with
            | OpamTypes.CString arg -> OpamFilter.expand_string env arg
            | OpamTypes.CIdent name -> name)
@@ -61,13 +65,16 @@ let render_opam_build env (commands: OpamTypes.command list) =
     in String.concat " " args
   in
   List.map
+    (* XXX: We ignore filters for now *)
     (fun (args, _filter) -> render_args args)
     commands
 
 let render_opam package_name opam =
   let env (var: OpamVariable.Full.t) =
+    (* TODO: OpamVariable.Full.t also has scope *)
     let variable = OpamVariable.Full.variable var in
     let name = OpamVariable.to_string variable in
+    (* Few helpers for common constructs *)
     let
       t = Some (OpamVariable.B true) and
       f = Some (OpamVariable.B false) and
@@ -94,4 +101,7 @@ let render_opam package_name opam =
     dependencies = render_opam_depends (OpamFile.OPAM.depends opam) and
     build = render_opam_build env (OpamFile.OPAM.build opam)
   in
-  { dependencies = dependencies; build = build }
+  {
+    dependencies = dependencies;
+    build = build
+  }
