@@ -170,11 +170,12 @@ let unix_open_flag_to_node_open_flag (flag: open_flag) =
 
 external date_now : unit -> float = "date_now" [@@bs.val "Date.now"]
 external node_process_cwd : unit -> string = "chdir" [@@bs.module "process"]
+external node_process_kill : int -> int -> unit = "kill" [@@bs.module "process"]
 external node_process_chdir : string -> unit = "chdir" [@@bs.module "process"]
 external node_process_getuid: unit -> int = "getuid" [@@bs.module "process"]
 external node_process_getgroups: unit -> int array = "getgroups" [@@bs.module "process"]
-external process_env_USER : string = "" [@@bs.val "process.env.USER"]
-external process_pid : int = "" [@@bs.val "process.pid"]
+external node_process_env_USER : string = "" [@@bs.val "process.env.USER"]
+external node_process_pid : int = "" [@@bs.val "process.pid"]
 
 let node_stats_to_unix_stats stat =
   {
@@ -334,9 +335,11 @@ let close_process_in _in_channel = 0
 
 let isatty _channel = true
 
-let getlogin () = process_env_USER
+let getlogin () =
+  node_process_env_USER
 
-let getpid () = process_pid
+let getpid () =
+  node_process_pid
 
 let stdout = 1
 let stdin = 2
@@ -348,7 +351,9 @@ let inet_addr_of_string addr = (addr: inet_addr)
 
 let create_process_env _prog _args _env _new_stdin _new_stdout _new_stderr = 1
 
-let kill _pid _sig = ()
+let kill pid signum =
+  node_process_kill pid signum
+
 let alarm _sec = ()
 let waitpid _flags _pid = (0, WEXITED 0)
 let wait () = (0, WEXITED 0)
