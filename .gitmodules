@@ -1,0 +1,18 @@
+[submodule "opam"]
+	path = opam
+	url = https://github.com/ocaml/opam.git
+[submodule "re"]
+	path = re
+	url = https://github.com/ocaml/ocaml-re.git
+[submodule "jsonm"]
+	path = jsonm
+	url = https://github.com/dbuenzli/jsonm.git
+[submodule "uchar"]
+	path = uchar
+	url = https://github.com/ocaml/uchar.git
+[submodule "uutf"]
+	path = uutf
+	url = https://github.com/dbuenzli/uutf.git
+[submodule "opam-file-format"]
+	path = opam-file-format
+	url = https://github.com/ocaml/opam-file-format.git

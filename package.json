@@ -1,0 +1,17 @@
+{
+  "name": "esy-opam",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "dependencies": {
+    "opam-file-format-bs": "^2.0.0~beta3"
+  },
+  "devDependencies": {
+    "bs-platform": "^1.7.4"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC"
+}

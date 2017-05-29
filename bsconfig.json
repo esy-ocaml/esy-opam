@@ -1,0 +1,57 @@
+{
+  "name": "esy-opam",
+  "sources": [
+    {
+      "dir": "opam-file-format/src"
+    },
+    {
+      "dir": "opam/src/format"
+    },
+    {
+      "dir": "re/lib"
+    },
+    {
+      "dir": "uutf/src"
+    },
+    {
+      "dir": "uchar/src"
+    },
+    {
+      "dir": "jsonm/src"
+    },
+    {
+      "dir": "opam/src/core",
+      "files": [
+        "opamFilename.ml",
+        "opamFilename.mli",
+        "opamUrl.ml",
+        "opamUrl.mli",
+        "opamVersion.ml",
+        "opamVersion.mli",
+        "opamVersionCompare.ml",
+        "opamVersionCompare.mli",
+        "opamCompat.ml",
+        "opamCompat.mli",
+        "opamCoreConfig.ml",
+        "opamCoreConfig.mli",
+        "opamHash.ml",
+        "opamHash.mli",
+        "opamProcess.ml",
+        "opamProcess.mli",
+        "opamConsole.ml",
+        "opamConsole.mli",
+        "opamSystem.ml",
+        "opamSystem.mli",
+        "opamDirTrack.ml",
+        "opamDirTrack.mli",
+        "opamStd.ml",
+        "opamStd.mli",
+        "opamJson.ml",
+        "opamJson.mli"
+      ]
+    },
+    {
+      "dir": "src"
+    }
+  ]
+}
