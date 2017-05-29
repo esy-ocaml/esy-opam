@@ -1,6 +1,6 @@
 [submodule "opam"]
 	path = opam
-	url = https://github.com/ocaml/opam.git
+	url = https://github.com/esy-ocaml/opam.git
 [submodule "re"]
 	path = re
 	url = https://github.com/ocaml/ocaml-re.git
