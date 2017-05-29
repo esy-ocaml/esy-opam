@@ -52,7 +52,9 @@ let to_pkgjson_dependencies depends =
   List.concat dependencies
 
 let () =
-  let opam = parse_opam_file "./reason.opam" in
+  if (Array.length Sys.argv) < 3 then exit 1 else ();
+  let opam_filename_in = Array.get Sys.argv 2 in
+  let opam = parse_opam_file opam_filename_in in
   let depends = OPAM.depends opam in
   let dependencies = to_pkgjson_dependencies depends in
   Js.log (Array.of_list dependencies);
