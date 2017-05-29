@@ -35,15 +35,16 @@ let rec flatten_filter (filter: OpamTypes.filter) =
 
 let to_pkgjson_version_constraint filter =
   let filter = list_of_formula_atoms filter in
-  List.map (fun f ->
-      match f with
-      | OpamTypes.Filter f ->
-        flatten_filter f
-      | OpamTypes.Constraint (op, f) ->
-        (to_pkgjson_relop op) ^ (flatten_filter f)
-    ) filter
+  List.map
+    (fun f ->
+       match f with
+       | OpamTypes.Filter f ->
+         flatten_filter f
+       | OpamTypes.Constraint (op, f) ->
+         (to_pkgjson_relop op) ^ (flatten_filter f))
+    filter
 
-let to_pkgjson_dependencies depends =
+let render_opam_depends depends =
   let depends = list_of_formula_atoms depends in
   let dependencies = List.map (fun (name, constr) ->
       let constr = to_pkgjson_version_constraint constr in
@@ -51,10 +52,29 @@ let to_pkgjson_dependencies depends =
       [name, if constr == "" then "*" else constr]) depends in
   List.concat dependencies
 
+let render_opam_build (commands: OpamTypes.command list) =
+  let render_args args =
+    let args = List.map
+        (fun (arg, _filter) -> match arg with
+           | OpamTypes.CString arg -> arg
+           | OpamTypes.CIdent name -> "$" ^ name)
+        args
+    in String.concat " " args
+  in
+  List.map
+    (fun (args, _filter) -> render_args args)
+    commands
+
 let () =
-  if (Array.length Sys.argv) < 3 then exit 1 else ();
   let opam_filename_in = Array.get Sys.argv 2 in
   let opam = parse_opam_file opam_filename_in in
-  let depends = OPAM.depends opam in
-  let dependencies = to_pkgjson_dependencies depends in
+  let
+    depends = OPAM.depends opam and
+    build = OPAM.build opam
+  in
+  let
+    dependencies = render_opam_depends depends and
+    esyBuild = render_opam_build build
+  in
   Js.log (Array.of_list dependencies);
+  Js.log (Array.of_list esyBuild);
