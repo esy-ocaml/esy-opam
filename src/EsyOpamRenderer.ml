@@ -64,15 +64,30 @@ let render_opam_build env (commands: OpamTypes.command list) =
     (fun (args, _filter) -> render_args args)
     commands
 
-let render_opam opam =
+let render_opam package_name opam =
   let env (var: OpamVariable.Full.t) =
     let variable = OpamVariable.Full.variable var in
     let name = OpamVariable.to_string variable in
-    let yes = Some (OpamVariable.B true) in
+    let
+      t = Some (OpamVariable.B true) and
+      f = Some (OpamVariable.B false) and
+      s value = Some (OpamVariable.S value)
+    in
     match name with
-    | "installed" -> yes
-    | "ocaml-native" -> yes
-    | "ocaml-native-dynlink" -> yes
+    | "installed" -> t
+    | "enable" -> t
+    | "ocaml-native" -> t
+    | "ocaml-native-dynlink" -> t
+    | "name" -> s package_name
+    | "make" -> s "make"
+    | "jobs" -> s "4"
+    | "bin" -> s "$cur__bin"
+    | "prefix" -> s "$cur__install"
+    | "lib" -> s "$cur__lib"
+    | "sbin" -> s "$cur__sbin"
+    | "doc" -> s "$cur__doc"
+    | "man" -> s "$cur__man"
+    | "pinned" ->  f
     | _ -> None
   in
   let

@@ -7,6 +7,6 @@ let parse_opam_file filename =
 let () =
   let opam_filename_in = Array.get Sys.argv 2 in
   let opam = parse_opam_file opam_filename_in in
-  let res = EsyOpamRenderer.render_opam opam in
+  let res = EsyOpamRenderer.render_opam "package" opam in
   Js.log (Array.of_list res.dependencies);
   Js.log (Array.of_list res.build);
