@@ -1,12 +1,15 @@
 module OPAM = OpamFile.OPAM
 
-let parse_opam_file filename =
-  let contents = Node_fs.readFileSync filename `utf8 in
-  OPAM.read_from_string contents
+let parse_opam data =
+  OPAM.read_from_string data
 
-let () =
-  let opam_filename_in = Array.get Sys.argv 2 in
-  let opam = parse_opam_file opam_filename_in in
-  let res = EsyOpamRenderer.render_opam "package" opam in
-  Js.log (Array.of_list res.dependencies);
-  Js.log (Array.of_list res.build);
+let render_opam package_name opam =
+  EsyOpamRenderer.render_opam package_name opam
+
+let render_opam_to_js package_name opam =
+  let res = render_opam package_name opam in
+  [%bs.obj {
+    name = package_name;
+    dependencies = Array.of_list res.dependencies;
+    build = Array.of_list res.build;
+  }]

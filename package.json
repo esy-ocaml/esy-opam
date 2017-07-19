@@ -1,14 +1,8 @@
 {
   "name": "esy-opam",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "version": "0.0.1",
   "devDependencies": {
-    "bs-platform": "^1.7.4"
-  },
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "author": "",
-  "license": "ISC"
+    "bs-platform": "^1.7.4",
+    "browserify": "^14.4.0"
+  }
 }

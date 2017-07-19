@@ -24,7 +24,10 @@ bootstrap:
 	npm install
 
 build: prepare
-	$(BIN)/bsb -clean-world -make-world
+	$(BIN)/bsb -make-world
+
+clean:
+	$(BIN)/bsb -clean-world
 
 watch: prepare
 	$(BIN)/bsb -w -clean-world -make-world
