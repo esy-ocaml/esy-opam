@@ -1,4 +1,5 @@
-var EsyOpam = require('./index.js');
+var EsyOpam = require('./bundle.js');
+console.log(EsyOpam);
 var fs = require('fs');
 
 var data = fs.readFileSync(process.argv[2], 'utf8');
