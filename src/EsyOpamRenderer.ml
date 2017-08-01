@@ -121,8 +121,10 @@ let render_opam_build env (commands: OpamTypes.command list) =
     let args = List.map
         (* XXX: We ignore filters for now *)
         (fun (arg, _filter) -> match arg with
-           | OpamTypes.CString arg -> OpamFilter.expand_string env arg
-           | OpamTypes.CIdent name -> name)
+           | OpamTypes.CString arg ->
+             OpamFilter.expand_string ~default:(fun _ -> "false") env arg
+           | OpamTypes.CIdent name ->
+             name)
         args
     in String.concat " " args
   in
@@ -198,6 +200,7 @@ let render_opam opam_name opam_version opam =
 
     | (_, _) -> None
   in
+
   let dependencies = render_opam_depends (OpamFile.OPAM.depends opam) in
   let build = render_opam_build env (OpamFile.OPAM.build opam) in
   let exported_env = let prefix = to_env_name opam_name in [
