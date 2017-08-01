@@ -35,6 +35,6 @@ watch: prepare
 dist: dist/esy-opam.js
 
 .PHONY: dist/esy-opam.js
-dist/esy-opam.js:
+dist/esy-opam.js: build
 	mkdir -p $(@D)
 	./node_modules/.bin/browserify --standalone EsyOpam --node --outfile $(@) ./index.js

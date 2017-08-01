@@ -14,7 +14,7 @@ let fixup pkg =
   in
 
   let export_caml_ld_library_path stublibs pkg =
-    let name = EsyOpamRenderer.envnorm_package_name pkg.name in
+    let name = EsyOpamRenderer.to_env_name pkg.name in
     let dir = match stublibs with
       | `NoStublibs -> name
       | `Stublibs -> "stublibs"
@@ -57,9 +57,12 @@ let fixup pkg =
       build = ["true"];
     }
   | "merlin" ->
+    let merlin_vim_rtp = (
+      "opam_alpha__slash__merlin__vim_rtp",
+      "$opam_alpha__slash__merlin__install/share/merlin/vim"
+    ) in
     { pkg with
-      exported_env = ("opam_alpha__slash__merlin__vim_rtp",
-                      "$opam_alpha__slash__merlin__install/share/merlin/vim")::pkg.exported_env
+      exported_env = merlin_vim_rtp::pkg.exported_env
     }
   | "cppo" ->
     { pkg with
@@ -118,17 +121,16 @@ let fixup pkg =
 let parse_opam data =
   OPAM.read_from_string data
 
-let render_opam package_name package_version opam =
-  EsyOpamRenderer.render_opam package_name package_version opam
+let render_opam opam_name opam_version opam =
+  EsyOpamRenderer.render_opam opam_name opam_version opam
 
-let render_opam_to_js package_name package_version opam =
-  let opam_scoped name = "@opam-alpha/" ^ name in
-  let pkg = render_opam package_name package_version opam in
+let render_opam_to_js opam_name opam_version opam =
+  let pkg = render_opam opam_name opam_version opam in
   let pkg = fixup pkg in
 
   let dependencies = Js.Dict.empty () in
   List.iter (fun (name, constr) ->
-      Js.Dict.set dependencies (opam_scoped name) constr
+      Js.Dict.set dependencies name constr
     ) pkg.dependencies;
 
   let exportedEnv =
@@ -140,7 +142,7 @@ let render_opam_to_js package_name package_version opam =
   in
 
   [%bs.obj {
-    name = opam_scoped pkg.name;
+    name = pkg.name;
     version = pkg.version;
     dependencies = dependencies;
     esy = {

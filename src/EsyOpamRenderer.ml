@@ -10,38 +10,44 @@ type t = {
   exported_env : (string * string) list;
 }
 
-let make_global_re v =
-  Js.Re.fromStringWithFlags ~flags:"g" v
+module CleanupRe = struct
+  let make_global_re v =
+    Js.Re.fromStringWithFlags ~flags:"g" v
 
-let find_underscore_re =
-  make_global_re "(_+)"
+  let find_underscore_re =
+    make_global_re "(_+)"
 
-let find_non_numbers_re =
-  make_global_re "[^0-9]"
+  let find_non_numbers_re =
+    make_global_re "[^0-9]"
 
-let find_leading_zeroes =
-  make_global_re "^0+"
+  let find_leading_zeroes =
+    make_global_re "^0+"
+end
 
-let envnorm_package_name name =
+let to_npm_name name =
+  "@opam-alpha/" ^ name
+
+let to_env_name name =
   name
   (* This has to be done before the other replacements. *)
-  |> Js.String.replaceByRe find_underscore_re "$1__"
+  |> Js.String.replaceByRe CleanupRe.find_underscore_re "$1__"
   |> Js.String.replace "." "__dot__"
   |> Js.String.replace "/" "__slash__"
   |> Js.String.replace "-" "_"
 
-let norm_version version =
+let to_npm_version version =
   let norm_version_segment v =
-    let v = v
-            |> Js.String.replaceByRe find_non_numbers_re ""
-            |> Js.String.replaceByRe find_leading_zeroes ""
+    let v =
+      v
+      |> Js.String.replaceByRe CleanupRe.find_non_numbers_re ""
+      |> Js.String.replaceByRe CleanupRe.find_leading_zeroes ""
     in
     if v = "" then "0" else v
   in
   let (version, suffix) = if Js.String.includes "+" version then
       let parts = Js.String.splitAtMost ~limit:2 "+" version in
       let version = Array.get parts 0 and suffix = Array.get parts 1 in
-      let suffix = Js.String.replaceByRe find_non_numbers_re "" suffix in
+      let suffix = Js.String.replaceByRe CleanupRe.find_non_numbers_re "" suffix in
       (version, suffix)
     else
       (version, "")
@@ -79,7 +85,7 @@ let rec list_of_formula_atoms depends =
 let rec render_version_formula (filter: OpamTypes.filter) =
   match filter with
   | OpamTypes.FBool _ -> ""
-  | OpamTypes.FString s -> norm_version s
+  | OpamTypes.FString s -> to_npm_version s
   | OpamTypes.FIdent _ -> ""
   | OpamTypes.FOp (a, op, b) -> (render_version_formula a) ^ (render_relop op) ^ (render_version_formula b)
   | OpamTypes.FAnd (a, b) -> (render_version_formula a) ^ " " ^ (render_version_formula b)
@@ -104,8 +110,10 @@ let render_opam_depends depends =
   List.map (fun (name, constr) ->
       let constr = render_version_constraint constr in
       let constr = String.concat " " constr in
-      (OpamPackage.Name.to_string name,
-       if constr == "" then "*" else constr)
+      let constr = if constr == "" then "*" else constr in
+      let name = OpamPackage.Name.to_string name in
+      let name = to_npm_name name in
+      (name, constr)
     ) depends
 
 let render_opam_build env (commands: OpamTypes.command list) =
@@ -123,8 +131,8 @@ let render_opam_build env (commands: OpamTypes.command list) =
     (fun (args, _filter) -> render_args args)
     commands
 
-let render_opam package_name package_version opam =
-  let version = norm_version package_version in
+let render_opam opam_name opam_version opam =
+  let version = to_npm_version opam_version in
   let env (var: OpamVariable.Full.t) =
     let variable = OpamVariable.Full.variable var in
     let scope = OpamVariable.Full.scope var in
@@ -138,7 +146,7 @@ let render_opam package_name package_version opam =
     match (scope, name) with
 
     | (OpamVariable.Full.Package name, var) ->
-      let name = envnorm_package_name (OpamPackage.Name.to_string name) in
+      let name = to_env_name (OpamPackage.Name.to_string name) in
       begin match var with
         | "installed" ->
           s ("${" ^ name ^ "_installed:-false}")
@@ -164,8 +172,9 @@ let render_opam package_name package_version opam =
     | (OpamVariable.Full.Global, "group") -> s "$USER"
     | (OpamVariable.Full.Global, "pinned") -> f
 
-    | (OpamVariable.Full.Self, "name") -> s package_name
-    | (OpamVariable.Full.Global, "name") -> s package_name
+    (** TODO: Is Self/Global correct here? Not sure if we need to duplicate them *)
+    | (OpamVariable.Full.Self, "name") -> s opam_name
+    | (OpamVariable.Full.Global, "name") -> s opam_name
     | (OpamVariable.Full.Self, "build") -> s "$cur__target_dir"
     | (OpamVariable.Full.Global, "build") -> s "$cur__target_dir"
     | (OpamVariable.Full.Self, "bin") -> s "$cur__bin"
@@ -191,7 +200,7 @@ let render_opam package_name package_version opam =
   in
   let dependencies = render_opam_depends (OpamFile.OPAM.depends opam) in
   let build = render_opam_build env (OpamFile.OPAM.build opam) in
-  let exported_env = let prefix = envnorm_package_name package_name in [
+  let exported_env = let prefix = to_env_name opam_name in [
       (prefix ^ "_version", version);
       (prefix ^ "_installed", "true");
       (prefix ^ "_enable", "true");
@@ -199,7 +208,7 @@ let render_opam package_name package_version opam =
   in
 
   {
-    name = package_name;
+    name = to_npm_name opam_name;
     version = version;
     dependencies = dependencies;
     build = build;
