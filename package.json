@@ -4,5 +4,6 @@
   "devDependencies": {
     "bs-platform": "^1.7.4",
     "browserify": "^14.4.0"
-  }
+  },
+  "main": "./dist/esy-opam.js"
 }

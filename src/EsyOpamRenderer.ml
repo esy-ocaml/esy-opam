@@ -1,10 +1,63 @@
-(* OPAM file converted to Esy format *)
-type result = {
+(* Info from OPAM file needed to construct the Esy package.json *)
+type t = {
+  name : string;
+  version : string;
   (* list of (name, constraint) pairs *)
-  dependencies: (OpamTypes.name * string) list;
+  dependencies : (string * string) list;
   (* list of expanded build commands *)
-  build: string list;
+  build : string list;
+  (* list of env var name-value pairs *)
+  exported_env : (string * string) list;
 }
+
+let make_global_re v =
+  Js.Re.fromStringWithFlags ~flags:"g" v
+
+let find_underscore_re =
+  make_global_re "(_+)"
+
+let find_non_numbers_re =
+  make_global_re "[^0-9]"
+
+let find_leading_zeroes =
+  make_global_re "^0+"
+
+let envnorm_package_name name =
+  name
+  (* This has to be done before the other replacements. *)
+  |> Js.String.replaceByRe find_underscore_re "$1__"
+  |> Js.String.replace "." "__dot__"
+  |> Js.String.replace "/" "__slash__"
+  |> Js.String.replace "-" "_"
+
+let norm_version version =
+  let norm_version_segment v =
+    let v = v
+            |> Js.String.replaceByRe find_non_numbers_re ""
+            |> Js.String.replaceByRe find_leading_zeroes ""
+    in
+    if v = "" then "0" else v
+  in
+  let (version, suffix) = if Js.String.includes "+" version then
+      let parts = Js.String.splitAtMost ~limit:2 "+" version in
+      let version = Array.get parts 0 and suffix = Array.get parts 1 in
+      let suffix = Js.String.replaceByRe find_non_numbers_re "" suffix in
+      (version, suffix)
+    else
+      (version, "")
+  in
+  let parts = Array.to_list (Js.String.splitAtMost ~limit:2 "." version) in
+  match parts with
+  | major::[] ->
+    let major = (norm_version_segment major) in
+    let minor = (norm_version_segment suffix) in
+    major ^ "." ^ minor ^ ".0"
+  | major::minor::[] ->
+    let major = (norm_version_segment major) in
+    let minor = (norm_version_segment (minor ^ suffix)) in
+    major ^ "." ^ minor ^ ".0"
+  | _ ->
+    version
 
 let render_relop (op : OpamParserTypes.relop) =
   match op with
@@ -23,14 +76,14 @@ let rec list_of_formula_atoms depends =
   | OpamFormula.And (a, b) -> List.append (list_of_formula_atoms a) (list_of_formula_atoms b)
   | OpamFormula.Or (a, b) -> List.append (list_of_formula_atoms a) (list_of_formula_atoms b)
 
-let rec list_of_filter_atoms (filter: OpamTypes.filter) =
+let rec render_version_formula (filter: OpamTypes.filter) =
   match filter with
   | OpamTypes.FBool _ -> ""
-  | OpamTypes.FString s -> s
+  | OpamTypes.FString s -> norm_version s
   | OpamTypes.FIdent _ -> ""
-  | OpamTypes.FOp (a, op, b) -> (list_of_filter_atoms a) ^ (render_relop op) ^ (list_of_filter_atoms b)
-  | OpamTypes.FAnd (a, b) -> (list_of_filter_atoms a) ^ " " ^ (list_of_filter_atoms b)
-  | OpamTypes.FOr (a, b) -> (list_of_filter_atoms a) ^ " || " ^ (list_of_filter_atoms b)
+  | OpamTypes.FOp (a, op, b) -> (render_version_formula a) ^ (render_relop op) ^ (render_version_formula b)
+  | OpamTypes.FAnd (a, b) -> (render_version_formula a) ^ " " ^ (render_version_formula b)
+  | OpamTypes.FOr (a, b) -> (render_version_formula a) ^ " || " ^ (render_version_formula b)
   | OpamTypes.FNot _ -> ""
   | OpamTypes.FDefined _ -> ""
   | OpamTypes.FUndef _ -> ""
@@ -41,18 +94,19 @@ let render_version_constraint filter =
     (fun f ->
        match f with
        | OpamTypes.Filter f ->
-         list_of_filter_atoms f
+         render_version_formula f
        | OpamTypes.Constraint (op, f) ->
-         (render_relop op) ^ (list_of_filter_atoms f))
+         (render_relop op) ^ (render_version_formula f))
     filter
 
 let render_opam_depends depends =
   let depends = list_of_formula_atoms depends in
-  let dependencies = List.map (fun (name, constr) ->
+  List.map (fun (name, constr) ->
       let constr = render_version_constraint constr in
       let constr = String.concat " " constr in
-      [name, if constr == "" then "*" else constr]) depends in
-  List.concat dependencies
+      (OpamPackage.Name.to_string name,
+       if constr == "" then "*" else constr)
+    ) depends
 
 let render_opam_build env (commands: OpamTypes.command list) =
   let render_args args =
@@ -69,10 +123,11 @@ let render_opam_build env (commands: OpamTypes.command list) =
     (fun (args, _filter) -> render_args args)
     commands
 
-let render_opam package_name opam =
+let render_opam package_name package_version opam =
+  let version = norm_version package_version in
   let env (var: OpamVariable.Full.t) =
-    (* TODO: OpamVariable.Full.t also has scope *)
     let variable = OpamVariable.Full.variable var in
+    let scope = OpamVariable.Full.scope var in
     let name = OpamVariable.to_string variable in
     (* Few helpers for common constructs *)
     let
@@ -80,28 +135,73 @@ let render_opam package_name opam =
       f = Some (OpamVariable.B false) and
       s value = Some (OpamVariable.S value)
     in
-    match name with
-    | "installed" -> t
-    | "enable" -> t
-    | "ocaml-native" -> t
-    | "ocaml-native-dynlink" -> t
-    | "name" -> s package_name
-    | "make" -> s "make"
-    | "jobs" -> s "4"
-    | "bin" -> s "$cur__bin"
-    | "prefix" -> s "$cur__install"
-    | "lib" -> s "$cur__lib"
-    | "sbin" -> s "$cur__sbin"
-    | "doc" -> s "$cur__doc"
-    | "man" -> s "$cur__man"
-    | "pinned" ->  f
-    | _ -> None
+    match (scope, name) with
+
+    | (OpamVariable.Full.Package name, var) ->
+      let name = envnorm_package_name (OpamPackage.Name.to_string name) in
+      begin match var with
+        | "installed" ->
+          s ("${" ^ name ^ "_installed:-false}")
+        | "enable" ->
+          s ("${" ^ name ^ "_enable:-false}")
+        | "version" ->
+          s ("${" ^ name ^ "_version}")
+        | "bin" ->
+          s (name ^ "__bin")
+        | "share" ->
+          s (name ^ "__share")
+        | "lib" ->
+          s (name ^ "__lib")
+        | _ ->
+          s ""
+      end
+
+    | (OpamVariable.Full.Global, "ocaml-native") -> t
+    | (OpamVariable.Full.Global, "ocaml-native-dynlink") -> t
+    | (OpamVariable.Full.Global, "make") -> s "make"
+    | (OpamVariable.Full.Global, "jobs") -> s "4"
+    | (OpamVariable.Full.Global, "user") -> s "$USER"
+    | (OpamVariable.Full.Global, "group") -> s "$USER"
+    | (OpamVariable.Full.Global, "pinned") -> f
+
+    | (OpamVariable.Full.Self, "name") -> s package_name
+    | (OpamVariable.Full.Global, "name") -> s package_name
+    | (OpamVariable.Full.Self, "build") -> s "$cur__target_dir"
+    | (OpamVariable.Full.Global, "build") -> s "$cur__target_dir"
+    | (OpamVariable.Full.Self, "bin") -> s "$cur__bin"
+    | (OpamVariable.Full.Global, "bin") -> s "$cur__bin"
+    | (OpamVariable.Full.Self, "prefix") -> s "$cur__install"
+    | (OpamVariable.Full.Global, "prefix") -> s "$cur__install"
+    | (OpamVariable.Full.Self, "lib") -> s "$cur__lib"
+    | (OpamVariable.Full.Global, "lib") -> s "$cur__lib"
+    | (OpamVariable.Full.Self, "stublibs") -> s "$cur__lib/stublibs"
+    | (OpamVariable.Full.Global, "stublibs") -> s "$cur__lib/stublibs"
+    | (OpamVariable.Full.Self, "etc") -> s "$cur__etc"
+    | (OpamVariable.Full.Global, "etc") -> s "$cur__etc"
+    | (OpamVariable.Full.Self, "sbin") -> s "$cur__sbin"
+    | (OpamVariable.Full.Global, "sbin") -> s "$cur__sbin"
+    | (OpamVariable.Full.Self, "doc") -> s "$cur__doc"
+    | (OpamVariable.Full.Global, "doc") -> s "$cur__doc"
+    | (OpamVariable.Full.Self, "man") -> s "$cur__man"
+    | (OpamVariable.Full.Global, "man") -> s "$cur__man"
+    | (OpamVariable.Full.Self, "share") -> s "$cur__share"
+    | (OpamVariable.Full.Global, "share") -> s "$cur__share"
+
+    | (_, _) -> None
   in
-  let
-    dependencies = render_opam_depends (OpamFile.OPAM.depends opam) and
-    build = render_opam_build env (OpamFile.OPAM.build opam)
+  let dependencies = render_opam_depends (OpamFile.OPAM.depends opam) in
+  let build = render_opam_build env (OpamFile.OPAM.build opam) in
+  let exported_env = let prefix = envnorm_package_name package_name in [
+      (prefix ^ "_version", version);
+      (prefix ^ "_installed", "true");
+      (prefix ^ "_enable", "true");
+    ]
   in
+
   {
+    name = package_name;
+    version = version;
     dependencies = dependencies;
-    build = build
+    build = build;
+    exported_env = exported_env;
   }

@@ -1,7 +1,7 @@
 var EsyOpam = require('./lib/js/src/main.js');
 
-function renderOpamToJs(packageName, opam) {
-  return EsyOpam.render_opam_to_js(packageName, opam);
+function renderOpamToJs(packageName, packageVersion, opam) {
+  return EsyOpam.render_opam_to_js(packageName, packageVersion, opam);
 }
 
 function parseOpam(data) {

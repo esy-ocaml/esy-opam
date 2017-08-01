@@ -32,5 +32,9 @@ clean:
 watch: prepare
 	$(BIN)/bsb -w -clean-world -make-world
 
-release:
-	./node_modules/.bin/browserify --standalone EsyOpam --node --outfile bundle.js ./index.js
+dist: dist/esy-opam.js
+
+.PHONY: dist/esy-opam.js
+dist/esy-opam.js:
+	mkdir -p $(@D)
+	./node_modules/.bin/browserify --standalone EsyOpam --node --outfile $(@) ./index.js
