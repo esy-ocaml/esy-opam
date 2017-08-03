@@ -121,11 +121,36 @@ let fixup pkg =
 let parse_opam data =
   OPAM.read_from_string data
 
-let render_opam opam_name opam_version opam =
-  EsyOpamRenderer.render_opam opam_name opam_version opam
+let parse_opam_url data =
+  OpamFile.URL.read_from_string data
 
-let render_opam_to_js opam_name opam_version opam =
-  let pkg = render_opam opam_name opam_version opam in
+let render_opam_url (opam_url : OpamFile.URL.t) =
+  let { OpamUrl. transport; path; hash; _ } = OpamFile.URL.url opam_url in
+  let url = match hash with
+    | None -> (transport ^ "://" ^ path)
+    | Some hash -> (transport ^ "://" ^ path ^ "#" ^ hash)
+  in
+  let checksum = OpamFile.URL.checksum opam_url in
+  let checksum = List.map (fun hash -> 
+      let kind = OpamHash.kind hash in
+      let kind = match kind with
+        | `MD5 -> "md5"
+        | `SHA512 -> "sha512"
+        | `SHA256 -> "sha256"
+      in
+      let contents = OpamHash.contents hash in
+      [%bs.obj {
+        kind;
+        contents
+      }]
+    ) checksum in
+  [%bs.obj {
+    url;
+    checksum = Array.of_list checksum
+  }]
+
+let render_opam opam_name opam_version opam =
+  let pkg = EsyOpamRenderer.render_opam opam_name opam_version opam in
   let pkg = fixup pkg in
 
   let dependencies = Js.Dict.empty () in

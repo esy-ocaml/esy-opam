@@ -1,14 +1,25 @@
 var EsyOpam = require('./lib/js/src/main.js');
 
-function renderOpamToJs(packageName, packageVersion, opam) {
-  return EsyOpam.render_opam_to_js(packageName, packageVersion, opam);
+function renderOpam(packageName, packageVersion, opam) {
+  return EsyOpam.render_opam(packageName, packageVersion, opam);
 }
 
 function parseOpam(data) {
   return EsyOpam.parse_opam(data);
 }
 
+function renderOpamUrl(opamUrl) {
+  return EsyOpam.render_opam_url(opamUrl);
+}
+
+function parseOpamUrl(data) {
+  return EsyOpam.parse_opam_url(data);
+}
+
 module.exports = {
-  renderOpamToJs: renderOpamToJs,
+  renderOpam: renderOpam,
   parseOpam: parseOpam,
+
+  renderOpamUrl: renderOpamUrl,
+  parseOpamUrl: parseOpamUrl,
 };

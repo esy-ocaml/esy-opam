@@ -10,5 +10,5 @@ let () =
   let filename = Array.get args 2 in
   let data = Node_fs.readFileSync filename `utf8 in
   let opam = Main.parse_opam data in
-  let pkgJson = Main.render_opam_to_js name version opam in
+  let pkgJson = Main.render_opam name version opam in
   Js.log pkgJson

@@ -2,8 +2,8 @@
   "name": "esy-opam",
   "version": "0.0.1",
   "devDependencies": {
-    "bs-platform": "^1.7.4",
-    "browserify": "^14.4.0"
+    "browserify": "^14.4.0",
+    "bs-platform": "^1.7.4"
   },
   "main": "./dist/esy-opam.js"
 }
