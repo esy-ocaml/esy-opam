@@ -5,7 +5,7 @@ type t = {
   (* list of (name, constraint) pairs *)
   dependencies : (string * string) list;
   (* list of expanded build commands *)
-  build : string list;
+  build : string list list;
   (* list of env var name-value pairs *)
   exported_env : (string * string) list;
 }
@@ -118,15 +118,14 @@ let render_opam_depends depends =
 
 let render_opam_build env (commands: OpamTypes.command list) =
   let render_args args =
-    let args = List.map
-        (* XXX: We ignore filters for now *)
-        (fun (arg, _filter) -> match arg with
-           | OpamTypes.CString arg ->
-             OpamFilter.expand_string ~default:(fun _ -> "false") env arg
-           | OpamTypes.CIdent name ->
-             name)
-        args
-    in String.concat " " args
+    List.map
+      (* XXX: We ignore filters for now *)
+      (fun (arg, _filter) -> match arg with
+         | OpamTypes.CString arg ->
+           OpamFilter.expand_string ~default:(fun _ -> "false") env arg
+         | OpamTypes.CIdent name ->
+           name)
+      args
   in
   List.map
     (* XXX: We ignore filters for now *)

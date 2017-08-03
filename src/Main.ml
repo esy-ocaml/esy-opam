@@ -6,12 +6,8 @@ module StringSet = Set.Make(String)
 let fixup pkg =
   let open EsyOpamRenderer in
 
-  let cleanup =
-    "sh -c '(make clean || true)'"
-  in
-  let opam_install =
-    "sh -c '(opam-installer --prefix=$cur__install || true)'"
-  in
+  let cleanup = ["sh"; "-c"; "(make clean || true)"] in
+  let opam_install = ["sh"; "-c"; "(opam-installer --prefix=$cur__install || true)"] in
 
   let export_caml_ld_library_path stublibs pkg =
     let name = EsyOpamRenderer.to_env_name pkg.name in
@@ -40,21 +36,21 @@ let fixup pkg =
   | "conf-gmp" ->
     { pkg with
       build = [
-        "cc -c $CFLAGS -I/usr/local/include test.c"
+        ["cc"; "-c"; "$CFLAGS"; "-I/usr/local/include test.c"]
       ];
     }
   | "typerex-build" ->
     { pkg with
       build = [
-        "./configure --prefix $cur__install";
-        "make";
-        "make install";
-        "(opam-installer --prefix=$cur__install || true)";
+        ["./configure"; "--prefix"; "$cur__install"];
+        ["make"];
+        ["make"; "install"];
+        opam_install;
       ];
     }
   | "ocamlbuild" ->
     { pkg with
-      build = ["true"];
+      build = [["true"]];
     }
   | "merlin" ->
     let merlin_vim_rtp = (
@@ -68,11 +64,11 @@ let fixup pkg =
     { pkg with
       build =  [
         cleanup;
-        "make all";
-        "make opt";
-        "make ocamlbuild";
-        "make LIBDIR=$cur__lib install-lib";
-        "make BINDIR=$cur__bin install-bin";
+        ["make"; "all"];
+        ["make"; "opt"];
+        ["make"; "ocamlbuild"];
+        ["make"; "LIBDIR=$cur__lib"; "install-lib"];
+        ["make"; "BINDIR=$cur__bin"; "install-bin"];
         opam_install;
       ];
     }
@@ -131,7 +127,7 @@ let render_opam_url (opam_url : OpamFile.URL.t) =
     | Some hash -> (transport ^ "://" ^ path ^ "#" ^ hash)
   in
   let checksum = OpamFile.URL.checksum opam_url in
-  let checksum = List.map (fun hash -> 
+  let checksum = List.map (fun hash ->
       let kind = OpamHash.kind hash in
       let kind = match kind with
         | `MD5 -> "md5"
@@ -171,7 +167,7 @@ let render_opam opam_name opam_version opam =
     version = pkg.version;
     dependencies = dependencies;
     esy = {
-      build = Array.of_list pkg.build;
+      build = Array.of_list (List.map Array.of_list pkg.build);
       exportedEnv = exportedEnv;
     }
   }]
