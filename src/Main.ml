@@ -6,6 +6,21 @@ module StringSet = Set.Make(String)
 let fixup pkg =
   let open EsyOpamRenderer in
 
+  let fixup_deps pkg =
+    let dependencies =
+      List.map
+        (fun (name, constr) ->
+           match name with
+           | "@opam-alpha/ocamlfind" ->
+             (name, "esy-ocaml/ocamlfind#esy/1.7.1-esy3")
+           | "@opam-alpha/camlp4" ->
+             (name, "esy-ocaml/camlp4#esy/4.02+7-TEST")
+           | _ -> (name, constr))
+        pkg.dependencies
+    in
+    { pkg with dependencies = dependencies }
+  in
+
   let cleanup = ["sh"; "-c"; "(make clean || true)"] in
   let opam_install = ["sh"; "-c"; "(opam-installer --prefix=$cur__install || true)"] in
 
@@ -32,6 +47,7 @@ let fixup pkg =
     { pkg with dependencies = dependencies }
   in
 
+  let pkg = fixup_deps pkg in
   match pkg.name with
   | "conf-gmp" ->
     { pkg with
@@ -168,6 +184,7 @@ let render_opam opam_name opam_version opam =
     dependencies = dependencies;
     esy = {
       build = Array.of_list (List.map Array.of_list pkg.build);
+      buildsInSource = Js.Boolean.to_js_boolean true;
       exportedEnv = exportedEnv;
     }
   }]

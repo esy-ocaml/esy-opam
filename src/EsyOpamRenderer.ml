@@ -52,7 +52,7 @@ let to_npm_version version =
     else
       (version, "")
   in
-  let parts = Array.to_list (Js.String.splitAtMost ~limit:2 "." version) in
+  let parts = Array.to_list (Js.String.splitAtMost ~limit:3 "." version) in
   match parts with
   | major::[] ->
     let major = (norm_version_segment major) in
@@ -62,6 +62,11 @@ let to_npm_version version =
     let major = (norm_version_segment major) in
     let minor = (norm_version_segment (minor ^ suffix)) in
     major ^ "." ^ minor ^ ".0"
+  | major::minor::patch::[] ->
+    let major = (norm_version_segment major) in
+    let minor = (norm_version_segment minor) in
+    let patch = (norm_version_segment patch) in
+    major ^ "." ^ minor ^ "." ^ patch
   | _ ->
     version
 
