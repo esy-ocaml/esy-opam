@@ -53,97 +53,99 @@ let fixup pkg =
     { pkg with dependencies = dependencies }
   in
 
-  let pkg =
-    pkg
-    |> fixup_deps
-    |> fixup_install
+  let fixup_overrides pkg =
+    match pkg.name with
+    | "@opam-alpha/conf-gmp" ->
+      { pkg with
+        build = [
+          ["cc"; "-c"; "$CFLAGS"; "-I/usr/local/include test.c"]
+        ];
+        install = [];
+      }
+    | "@opam-alpha/typerex-build" ->
+      { pkg with
+        build = [
+          ["./configure"; "--prefix"; "$cur__install"];
+          ["make"];
+          ["make"; "install"];
+          opam_install;
+        ];
+        install = [];
+      }
+    | "@opam-alpha/ocamlbuild" ->
+      { pkg with
+        build = [["true"]];
+        install = [];
+      }
+    | "@opam-alpha/merlin" ->
+      let merlin_vim_rtp = (
+        "opam_alpha__slash__merlin__vim_rtp",
+        "$opam_alpha__slash__merlin__install/share/merlin/vim"
+      ) in
+      { pkg with
+        exported_env = merlin_vim_rtp::pkg.exported_env
+      }
+    | "@opam-alpha/cppo" ->
+      { pkg with
+        build =  [
+          cleanup;
+          ["make"; "all"];
+          ["make"; "opt"];
+          ["make"; "ocamlbuild"];
+          ["make"; "LIBDIR=$cur__lib"; "install-lib"];
+          ["make"; "BINDIR=$cur__bin"; "install-bin"];
+          opam_install;
+        ];
+        install = [];
+      }
+    | "@opam-alpha/ctypes" -> export_caml_ld_library_path `NoStublibs pkg
+    | "@opam-alpha/zarith" -> export_caml_ld_library_path `NoStublibs pkg
+    | "@opam-alpha/cstruct" -> export_caml_ld_library_path `NoStublibs pkg
+    | "@opam-alpha/launchd" -> export_caml_ld_library_path `NoStublibs pkg
+    | "@opam-alpha/lwt" -> export_caml_ld_library_path `NoStublibs pkg
+    | "@opam-alpha/lambda-term" -> export_caml_ld_library_path `NoStublibs pkg
+    | "@opam-alpha/bin_prot" -> export_caml_ld_library_path `Stublibs pkg
+    | "@opam-alpha/core_kernel" -> export_caml_ld_library_path `Stublibs pkg
+    | "@opam-alpha/core" -> export_caml_ld_library_path `Stublibs pkg
+    | "@opam-alpha/async_extra" -> export_caml_ld_library_path `Stublibs pkg
+    | "@opam-alpha/async_ssl" -> export_caml_ld_library_path `Stublibs pkg
+    | "@opam-alpha/jenga" -> export_caml_ld_library_path `Stublibs pkg
+    | "@opam-alpha/re2" -> export_caml_ld_library_path `Stublibs pkg
+    | "@opam-alpha/ppx_expect" -> export_caml_ld_library_path `Stublibs pkg
+    | "@opam-alpha/ocaml_plugin" -> export_caml_ld_library_path `Stublibs pkg
+    | "@opam-alpha/async_unix" -> export_caml_ld_library_path `Stublibs pkg
+    | "@opam-alpha/inotify" -> export_caml_ld_library_path `NoStublibs pkg
+    | "@opam-alpha/io-page" -> export_caml_ld_library_path `NoStublibs pkg
+    | "@opam-alpha/pcre" -> export_caml_ld_library_path `NoStublibs pkg
+
+    | "@opam-alpha/cohttp" -> exclude_dependencies ["mirage-net"] pkg
+    | "@opam-alpha/conduit" -> exclude_dependencies ["mirage-dns"] pkg
+    | "@opam-alpha/ocamlgraph" -> exclude_dependencies ["conf-gnomecanvas"] pkg
+    | "@opam-alpha/utop" -> exclude_dependencies ["camlp4"] pkg
+
+    | "@opam-alpha/vchan" ->
+      pkg
+      |> exclude_dependencies ["xen-evtchn"; "xen-gnt"]
+      |> export_caml_ld_library_path `NoStublibs
+
+    | "@opam-alpha/nocrypto" ->
+      pkg
+      |> exclude_dependencies ["mirage-xen"; "mirage-entropy-xen"; "zarith-xen"]
+      |> export_caml_ld_library_path `NoStublibs
+
+    | "@opam-alpha/mtime" ->
+      pkg
+      |> exclude_dependencies ["js_of_ocaml"]
+      |> export_caml_ld_library_path `Stublibs
+
+    | _ -> pkg
   in
 
-  match pkg.name with
-  | "@opam-alpha/conf-gmp" ->
-    { pkg with
-      build = [
-        ["cc"; "-c"; "$CFLAGS"; "-I/usr/local/include test.c"]
-      ];
-      install = [];
-    }
-  | "@opam-alpha/typerex-build" ->
-    { pkg with
-      build = [
-        ["./configure"; "--prefix"; "$cur__install"];
-        ["make"];
-        ["make"; "install"];
-        opam_install;
-      ];
-      install = [];
-    }
-  | "@opam-alpha/ocamlbuild" ->
-    { pkg with
-      build = [["true"]];
-      install = [];
-    }
-  | "@opam-alpha/merlin" ->
-    let merlin_vim_rtp = (
-      "opam_alpha__slash__merlin__vim_rtp",
-      "$opam_alpha__slash__merlin__install/share/merlin/vim"
-    ) in
-    { pkg with
-      exported_env = merlin_vim_rtp::pkg.exported_env
-    }
-  | "@opam-alpha/cppo" ->
-    { pkg with
-      build =  [
-        cleanup;
-        ["make"; "all"];
-        ["make"; "opt"];
-        ["make"; "ocamlbuild"];
-        ["make"; "LIBDIR=$cur__lib"; "install-lib"];
-        ["make"; "BINDIR=$cur__bin"; "install-bin"];
-        opam_install;
-      ];
-      install = [];
-    }
-  | "@opam-alpha/ctypes" -> export_caml_ld_library_path `NoStublibs pkg
-  | "@opam-alpha/zarith" -> export_caml_ld_library_path `NoStublibs pkg
-  | "@opam-alpha/cstruct" -> export_caml_ld_library_path `NoStublibs pkg
-  | "@opam-alpha/launchd" -> export_caml_ld_library_path `NoStublibs pkg
-  | "@opam-alpha/lwt" -> export_caml_ld_library_path `NoStublibs pkg
-  | "@opam-alpha/lambda-term" -> export_caml_ld_library_path `NoStublibs pkg
-  | "@opam-alpha/bin_prot" -> export_caml_ld_library_path `Stublibs pkg
-  | "@opam-alpha/core_kernel" -> export_caml_ld_library_path `Stublibs pkg
-  | "@opam-alpha/core" -> export_caml_ld_library_path `Stublibs pkg
-  | "@opam-alpha/async_extra" -> export_caml_ld_library_path `Stublibs pkg
-  | "@opam-alpha/async_ssl" -> export_caml_ld_library_path `Stublibs pkg
-  | "@opam-alpha/jenga" -> export_caml_ld_library_path `Stublibs pkg
-  | "@opam-alpha/re2" -> export_caml_ld_library_path `Stublibs pkg
-  | "@opam-alpha/ppx_expect" -> export_caml_ld_library_path `Stublibs pkg
-  | "@opam-alpha/ocaml_plugin" -> export_caml_ld_library_path `Stublibs pkg
-  | "@opam-alpha/async_unix" -> export_caml_ld_library_path `Stublibs pkg
-  | "@opam-alpha/inotify" -> export_caml_ld_library_path `NoStublibs pkg
-  | "@opam-alpha/io-page" -> export_caml_ld_library_path `NoStublibs pkg
-  | "@opam-alpha/pcre" -> export_caml_ld_library_path `NoStublibs pkg
+  pkg
+  |> fixup_deps
+  |> fixup_install
+  |> fixup_overrides
 
-  | "@opam-alpha/cohttp" -> exclude_dependencies ["mirage-net"] pkg
-  | "@opam-alpha/conduit" -> exclude_dependencies ["mirage-dns"] pkg
-  | "@opam-alpha/ocamlgraph" -> exclude_dependencies ["conf-gnomecanvas"] pkg
-  | "@opam-alpha/utop" -> exclude_dependencies ["camlp4"] pkg
-
-  | "@opam-alpha/vchan" ->
-    pkg
-    |> exclude_dependencies ["xen-evtchn"; "xen-gnt"]
-    |> export_caml_ld_library_path `NoStublibs
-
-  | "@opam-alpha/nocrypto" ->
-    pkg
-    |> exclude_dependencies ["mirage-xen"; "mirage-entropy-xen"; "zarith-xen"]
-    |> export_caml_ld_library_path `NoStublibs
-
-  | "@opam-alpha/mtime" ->
-    pkg
-    |> exclude_dependencies ["js_of_ocaml"]
-    |> export_caml_ld_library_path `Stublibs
-
-  | _ -> pkg
 
 let parse_opam data =
   OPAM.read_from_string data
