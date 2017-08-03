@@ -129,7 +129,7 @@ let render_opam_build opam_name env (commands: OpamTypes.command list) =
       (* XXX: We ignore filters for now *)
       (fun (arg, _filter) -> match arg with
          | OpamTypes.CString arg ->
-           OpamFilter.expand_string ~default:(fun _ -> "false") env arg
+           OpamFilter.expand_string ~partial:true env arg
          | OpamTypes.CIdent name ->
            (match name with
             | "name" -> opam_name
@@ -160,64 +160,65 @@ let render_opam opam_name opam_version opam =
     let name = OpamVariable.to_string variable in
     (* Few helpers for common constructs *)
     let
-      t = Some (OpamVariable.B true) and
-      f = Some (OpamVariable.B false) and
-      s value = Some (OpamVariable.S value)
+      t = Some (OpamVariable.bool true) and
+      f = Some (OpamVariable.bool false) and
+      s value = Some (OpamVariable.string value)
     in
-    match (scope, name) with
+    let res = match (scope, name) with
 
-    | (OpamVariable.Full.Package name, var) ->
-      let name = to_env_name (OpamPackage.Name.to_string name) in
-      begin match var with
-        | "installed" ->
-          s ("${" ^ name ^ "_installed:-false}")
-        | "enable" ->
-          s ("${" ^ name ^ "_enable:-false}")
-        | "version" ->
-          s ("${" ^ name ^ "_version}")
-        | "bin" ->
-          s (name ^ "__bin")
-        | "share" ->
-          s (name ^ "__share")
-        | "lib" ->
-          s (name ^ "__lib")
-        | _ ->
-          s ""
-      end
+      | (OpamVariable.Full.Package name, var) ->
+        let name = to_env_name (OpamPackage.Name.to_string name) in
+        begin match var with
+          | "installed" ->
+            s ("${" ^ name ^ "_installed:-disable}")
+          | "enable" ->
+            s ("${" ^ name ^ "_enable:-disable}")
+          | "version" ->
+            s ("${" ^ name ^ "_version}")
+          | "bin" ->
+            s (name ^ "__bin")
+          | "share" ->
+            s (name ^ "__share")
+          | "lib" ->
+            s (name ^ "__lib")
+          | _ ->
+            s ""
+        end
 
-    | (OpamVariable.Full.Global, "ocaml-native") -> t
-    | (OpamVariable.Full.Global, "ocaml-native-dynlink") -> t
-    | (OpamVariable.Full.Global, "make") -> s "make"
-    | (OpamVariable.Full.Global, "jobs") -> s "4"
-    | (OpamVariable.Full.Global, "user") -> s "$USER"
-    | (OpamVariable.Full.Global, "group") -> s "$USER"
-    | (OpamVariable.Full.Global, "pinned") -> f
+      | (OpamVariable.Full.Global, "ocaml-native") -> t
+      | (OpamVariable.Full.Global, "ocaml-native-dynlink") -> t
+      | (OpamVariable.Full.Global, "make") -> s "make"
+      | (OpamVariable.Full.Global, "jobs") -> s "4"
+      | (OpamVariable.Full.Global, "user") -> s "$USER"
+      | (OpamVariable.Full.Global, "group") -> s "$USER"
+      | (OpamVariable.Full.Global, "pinned") -> f
 
-    (** TODO: Is Self/Global correct here? Not sure if we need to duplicate them *)
-    | (OpamVariable.Full.Self, "name") -> s opam_name
-    | (OpamVariable.Full.Global, "name") -> s opam_name
-    | (OpamVariable.Full.Self, "build") -> s "$cur__target_dir"
-    | (OpamVariable.Full.Global, "build") -> s "$cur__target_dir"
-    | (OpamVariable.Full.Self, "bin") -> s "$cur__bin"
-    | (OpamVariable.Full.Global, "bin") -> s "$cur__bin"
-    | (OpamVariable.Full.Self, "prefix") -> s "$cur__install"
-    | (OpamVariable.Full.Global, "prefix") -> s "$cur__install"
-    | (OpamVariable.Full.Self, "lib") -> s "$cur__lib"
-    | (OpamVariable.Full.Global, "lib") -> s "$cur__lib"
-    | (OpamVariable.Full.Self, "stublibs") -> s "$cur__lib/stublibs"
-    | (OpamVariable.Full.Global, "stublibs") -> s "$cur__lib/stublibs"
-    | (OpamVariable.Full.Self, "etc") -> s "$cur__etc"
-    | (OpamVariable.Full.Global, "etc") -> s "$cur__etc"
-    | (OpamVariable.Full.Self, "sbin") -> s "$cur__sbin"
-    | (OpamVariable.Full.Global, "sbin") -> s "$cur__sbin"
-    | (OpamVariable.Full.Self, "doc") -> s "$cur__doc"
-    | (OpamVariable.Full.Global, "doc") -> s "$cur__doc"
-    | (OpamVariable.Full.Self, "man") -> s "$cur__man"
-    | (OpamVariable.Full.Global, "man") -> s "$cur__man"
-    | (OpamVariable.Full.Self, "share") -> s "$cur__share"
-    | (OpamVariable.Full.Global, "share") -> s "$cur__share"
+      (** TODO: Is Self/Global correct here? Not sure if we need to duplicate them *)
+      | (OpamVariable.Full.Self, "name") -> s opam_name
+      | (OpamVariable.Full.Global, "name") -> s opam_name
+      | (OpamVariable.Full.Self, "build") -> s "$cur__target_dir"
+      | (OpamVariable.Full.Global, "build") -> s "$cur__target_dir"
+      | (OpamVariable.Full.Self, "bin") -> s "$cur__bin"
+      | (OpamVariable.Full.Global, "bin") -> s "$cur__bin"
+      | (OpamVariable.Full.Self, "prefix") -> s "$cur__install"
+      | (OpamVariable.Full.Global, "prefix") -> s "$cur__install"
+      | (OpamVariable.Full.Self, "lib") -> s "$cur__lib"
+      | (OpamVariable.Full.Global, "lib") -> s "$cur__lib"
+      | (OpamVariable.Full.Self, "stublibs") -> s "$cur__lib/stublibs"
+      | (OpamVariable.Full.Global, "stublibs") -> s "$cur__lib/stublibs"
+      | (OpamVariable.Full.Self, "etc") -> s "$cur__etc"
+      | (OpamVariable.Full.Global, "etc") -> s "$cur__etc"
+      | (OpamVariable.Full.Self, "sbin") -> s "$cur__sbin"
+      | (OpamVariable.Full.Global, "sbin") -> s "$cur__sbin"
+      | (OpamVariable.Full.Self, "doc") -> s "$cur__doc"
+      | (OpamVariable.Full.Global, "doc") -> s "$cur__doc"
+      | (OpamVariable.Full.Self, "man") -> s "$cur__man"
+      | (OpamVariable.Full.Global, "man") -> s "$cur__man"
+      | (OpamVariable.Full.Self, "share") -> s "$cur__share"
+      | (OpamVariable.Full.Global, "share") -> s "$cur__share"
 
-    | (_, _) -> None
+      | (_, _name) -> None
+    in res
   in
 
   let dependencies = render_opam_depends (OpamFile.OPAM.depends opam) in
@@ -225,8 +226,8 @@ let render_opam opam_name opam_version opam =
   let install = render_opam_build opam_name env (OpamFile.OPAM.install opam) in
   let exported_env = let prefix = to_env_name opam_name in [
       (prefix ^ "_version", version);
-      (prefix ^ "_installed", "true");
-      (prefix ^ "_enable", "true");
+      (prefix ^ "_installed", "enable");
+      (prefix ^ "_enable", "enable");
     ]
   in
 
