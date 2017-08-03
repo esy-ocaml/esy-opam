@@ -47,7 +47,7 @@ let fixup pkg =
     let excluded = StringSet.of_list excluded in
     let dependencies =
       List.filter
-        (fun (name, _) -> StringSet.mem name excluded)
+        (fun (name, _) -> not (StringSet.mem name excluded))
         pkg.dependencies
     in
     { pkg with dependencies = dependencies }
