@@ -6,6 +6,8 @@ type t = {
   dependencies : (string * string) list;
   (* list of expanded build commands *)
   build : string list list;
+  (* list of expanded install commands *)
+  install : string list list;
   (* list of env var name-value pairs *)
   exported_env : (string * string) list;
 }
@@ -121,7 +123,7 @@ let render_opam_depends depends =
       (name, constr)
     ) depends
 
-let render_opam_build env (commands: OpamTypes.command list) =
+let render_opam_build opam_name env (commands: OpamTypes.command list) =
   let render_args args =
     List.map
       (* XXX: We ignore filters for now *)
@@ -129,7 +131,20 @@ let render_opam_build env (commands: OpamTypes.command list) =
          | OpamTypes.CString arg ->
            OpamFilter.expand_string ~default:(fun _ -> "false") env arg
          | OpamTypes.CIdent name ->
-           name)
+           (match name with
+            | "name" -> opam_name
+            | "make" -> "make"
+            | "jobs" -> "4"
+            | "bin" -> "$cur__bin"
+            | "prefix" -> "$cur__install"
+            | "lib" -> "$cur__lib"
+            | "sbin" -> "$cur__sbin"
+            | "doc" -> "$cur__doc"
+            | "man" -> "$cur__man"
+            | "ocaml-native" -> "true"
+            | "ocaml-native-dynlink" -> "true"
+            | "pinned" -> "false"
+            | name -> name))
       args
   in
   List.map
@@ -206,7 +221,8 @@ let render_opam opam_name opam_version opam =
   in
 
   let dependencies = render_opam_depends (OpamFile.OPAM.depends opam) in
-  let build = render_opam_build env (OpamFile.OPAM.build opam) in
+  let build = render_opam_build opam_name env (OpamFile.OPAM.build opam) in
+  let install = render_opam_build opam_name env (OpamFile.OPAM.install opam) in
   let exported_env = let prefix = to_env_name opam_name in [
       (prefix ^ "_version", version);
       (prefix ^ "_installed", "true");
@@ -219,5 +235,6 @@ let render_opam opam_name opam_version opam =
     version = version;
     dependencies = dependencies;
     build = build;
+    install = install;
     exported_env = exported_env;
   }
