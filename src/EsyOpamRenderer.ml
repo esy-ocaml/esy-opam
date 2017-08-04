@@ -2,8 +2,11 @@
 type t = {
   name : string;
   version : string;
-  (* list of (name, constraint) pairs *)
+  (* list of (name, constraint) pairs for regular dependencies *)
   dependencies : (string * string) list;
+  (* list of (name, constraint) pairs for optional dependencies *)
+  optional_dependencies : (string * string) list;
+  substs : string list;
   (* list of expanded build commands *)
   build : string list list;
   (* list of expanded install commands *)
@@ -22,8 +25,13 @@ module CleanupRe = struct
   let find_non_numbers_re =
     make_global_re "[^0-9]"
 
-  let find_leading_zeroes =
+  let find_leading_zeroes_re =
     make_global_re "^0+"
+
+  let find_at_re= make_global_re "@"
+  let find_dash_re = make_global_re "\-"
+  let find_slash_re = make_global_re "\/"
+  let find_dot_re = make_global_re "\."
 end
 
 let to_npm_name name =
@@ -33,16 +41,17 @@ let to_env_name name =
   name
   (* This has to be done before the other replacements. *)
   |> Js.String.replaceByRe CleanupRe.find_underscore_re "$1__"
-  |> Js.String.replace "." "__dot__"
-  |> Js.String.replace "/" "__slash__"
-  |> Js.String.replace "-" "_"
+  |> Js.String.replaceByRe CleanupRe.find_at_re ""
+  |> Js.String.replaceByRe CleanupRe.find_dot_re "__dot__"
+  |> Js.String.replaceByRe CleanupRe.find_slash_re "__slash__"
+  |> Js.String.replaceByRe CleanupRe.find_dash_re "_"
 
 let to_npm_version version =
   let norm_version_segment v =
     let v =
       v
       |> Js.String.replaceByRe CleanupRe.find_non_numbers_re ""
-      |> Js.String.replaceByRe CleanupRe.find_leading_zeroes ""
+      |> Js.String.replaceByRe CleanupRe.find_leading_zeroes_re ""
     in
     if v = "" then "0" else v
   in
@@ -222,6 +231,8 @@ let render_opam opam_name opam_version opam =
   in
 
   let dependencies = render_opam_depends (OpamFile.OPAM.depends opam) in
+  let optional_dependencies = render_opam_depends (OpamFile.OPAM.depopts opam) in
+  let substs = List.map OpamFilename.Base.to_string (OpamFile.OPAM.substs opam) in
   let build = render_opam_build opam_name env (OpamFile.OPAM.build opam) in
   let install = render_opam_build opam_name env (OpamFile.OPAM.install opam) in
   let exported_env = let prefix = to_env_name opam_name in [
@@ -233,9 +244,11 @@ let render_opam opam_name opam_version opam =
 
   {
     name = to_npm_name opam_name;
-    version = version;
-    dependencies = dependencies;
-    build = build;
-    install = install;
-    exported_env = exported_env;
+    version;
+    dependencies;
+    optional_dependencies;
+    substs;
+    build;
+    install;
+    exported_env;
   }
