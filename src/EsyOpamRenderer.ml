@@ -90,45 +90,49 @@ let render_relop (op : OpamParserTypes.relop) =
   | `Geq -> " >= "
   | `Gt -> " > "
 
-let rec list_of_formula_atoms depends =
-  match depends with
+let rec render_formula formula =
+  let rec render_filter (filter: OpamTypes.filter) =
+    match filter with
+    | OpamTypes.FBool _ -> ""
+    | OpamTypes.FString s -> to_npm_version s
+    | OpamTypes.FIdent _ -> ""
+    | OpamTypes.FOp (a, op, b) -> (render_filter a) ^ (render_relop op) ^ (render_filter b)
+    | OpamTypes.FAnd (a, b) -> (render_filter a) ^ " " ^ (render_filter b)
+    | OpamTypes.FOr (a, b) -> (render_filter a) ^ " || " ^ (render_filter b)
+    | OpamTypes.FNot _ -> ""
+    | OpamTypes.FDefined _ -> ""
+    | OpamTypes.FUndef _ -> ""
+  in
+  let render_item item =
+    match item with
+    | OpamTypes.Filter item ->
+      render_filter item
+    | OpamTypes.Constraint (op, item) ->
+      (render_relop op) ^ (render_filter item)
+  in
+  match formula with
+  | OpamFormula.Empty -> "*"
+  | OpamFormula.Atom item -> render_item item
+  | OpamFormula.Block f -> render_formula f
+  | OpamFormula.And (a, b) -> (render_formula a) ^ ", " ^ (render_formula b)
+  | OpamFormula.Or (a, b) -> (render_formula a) ^ " || " ^ (render_formula b)
+
+let rec flatten_formula formula =
+  match formula with
   | OpamFormula.Empty -> []
   | OpamFormula.Atom item -> [item]
-  | OpamFormula.Block f -> list_of_formula_atoms f
-  | OpamFormula.And (a, b) -> List.append (list_of_formula_atoms a) (list_of_formula_atoms b)
-  | OpamFormula.Or (a, b) -> List.append (list_of_formula_atoms a) (list_of_formula_atoms b)
-
-let rec render_version_formula (filter: OpamTypes.filter) =
-  match filter with
-  | OpamTypes.FBool _ -> ""
-  | OpamTypes.FString s -> to_npm_version s
-  | OpamTypes.FIdent _ -> ""
-  | OpamTypes.FOp (a, op, b) -> (render_version_formula a) ^ (render_relop op) ^ (render_version_formula b)
-  | OpamTypes.FAnd (a, b) -> (render_version_formula a) ^ " " ^ (render_version_formula b)
-  | OpamTypes.FOr (a, b) -> (render_version_formula a) ^ " || " ^ (render_version_formula b)
-  | OpamTypes.FNot _ -> ""
-  | OpamTypes.FDefined _ -> ""
-  | OpamTypes.FUndef _ -> ""
-
-let render_version_constraint filter =
-  let filter = list_of_formula_atoms filter in
-  List.map
-    (fun f ->
-       match f with
-       | OpamTypes.Filter f ->
-         render_version_formula f
-       | OpamTypes.Constraint (op, f) ->
-         (render_relop op) ^ (render_version_formula f))
-    filter
+  | OpamFormula.Block f -> flatten_formula f
+  | OpamFormula.And (a, b) -> (flatten_formula a) @ (flatten_formula b)
+  | OpamFormula.Or (a, b) -> (flatten_formula a) @ (flatten_formula b)
 
 let render_opam_depends depends =
-  let depends = list_of_formula_atoms depends in
+  (** We flatten packages formula because esy-npm cannot express formulas over
+      packages. In the current impl. we just assume thatany package mentioned
+      in original opam formula is required. *)
+  let depends = flatten_formula depends in
   List.map (fun (name, constr) ->
-      let constr = render_version_constraint constr in
-      let constr = String.concat " " constr in
-      let constr = if constr == "" then "*" else constr in
-      let name = OpamPackage.Name.to_string name in
-      let name = to_npm_name name in
+      let name = name |> OpamPackage.Name.to_string |> to_npm_name in
+      let constr = render_formula constr in
       (name, constr)
     ) depends
 
