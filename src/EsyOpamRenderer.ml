@@ -114,7 +114,7 @@ let rec render_formula formula =
   | OpamFormula.Empty -> "*"
   | OpamFormula.Atom item -> render_item item
   | OpamFormula.Block f -> render_formula f
-  | OpamFormula.And (a, b) -> (render_formula a) ^ ", " ^ (render_formula b)
+  | OpamFormula.And (a, b) -> (render_formula a) ^ " " ^ (render_formula b)
   | OpamFormula.Or (a, b) -> (render_formula a) ^ " || " ^ (render_formula b)
 
 let rec flatten_formula formula =
@@ -183,7 +183,7 @@ let render_opam opam_name opam_version opam =
         let name = to_env_name (OpamPackage.Name.to_string name) in
         begin match var with
           | "installed" ->
-            s ("${" ^ name ^ "_installed:-disable}")
+            s ("${" ^ name ^ "_installed:-false}")
           | "enable" ->
             s ("${" ^ name ^ "_enable:-disable}")
           | "version" ->
@@ -241,7 +241,7 @@ let render_opam opam_name opam_version opam =
   let install = render_opam_build opam_name env (OpamFile.OPAM.install opam) in
   let exported_env = let prefix = to_env_name opam_name in [
       (prefix ^ "_version", version);
-      (prefix ^ "_installed", "enable");
+      (prefix ^ "_installed", "true");
       (prefix ^ "_enable", "enable");
     ]
   in
