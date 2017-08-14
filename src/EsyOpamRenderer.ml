@@ -136,13 +136,163 @@ let render_opam_depends depends =
       (name, constr)
     ) depends
 
+
+(** This is a modified copy of OpamFilter.expand_string function
+    See XXX: marks inside for changes we made.
+*)
+let expand_string ?(partial=false) ?default env text =
+  let open OpamTypes in
+  let open OpamTypesBase in
+  let open OpamStd.Op in
+
+  let escape_expansions =
+    Re.replace_string Re.(compile @@ char '%') ~by:"%%"
+  in
+
+  let desugar_fident ((_packages,_var,_converter) as fident) =
+    fident
+    (**
+       XXX: We don't desugar it!
+       let enable = OpamVariable.of_string "enable" in
+       if packages <> [] && var = enable && converter = None then
+        packages, OpamVariable.of_string "installed", Some ("enable","disable")
+       else fident
+    *)
+  in
+
+  let resolve_ident ?(no_undef_expand=false) env fident =
+    let open OpamStd.Option.Op in
+    let packages,var,converter = desugar_fident fident in
+    let bool_of_value = function
+      | B b -> Some b
+      | S s -> try Some (bool_of_string s) with Invalid_argument _ -> None
+    in
+    let resolve name =
+      let var = match name with
+        | Some n -> OpamVariable.Full.create n var
+        | None -> OpamVariable.Full.self var
+      in
+      env var
+    in
+    let value_opt : variable_contents option = match packages with
+      | [] -> env (OpamVariable.Full.global var)
+      | [name] -> resolve name
+      | names ->
+        List.fold_left (fun acc name ->
+            if acc = Some false then acc else
+              match resolve name with
+              | Some (B true) -> acc
+              | v -> v >>= bool_of_value)
+          (Some true) names
+        >>| fun b -> B b
+    in
+    match converter, no_undef_expand with
+    | Some (iftrue, iffalse), false ->
+      (match value_opt >>= bool_of_value with
+       | Some true -> FString iftrue
+       | Some false -> FString iffalse
+       | None -> FString iffalse)
+    | _ ->
+      (match value_opt with
+       | Some (B b) -> FBool b
+       | Some (S s) -> FString s
+       | None -> FUndef (FIdent fident))
+  in
+
+  let to_string t =
+    let rec aux ?(context=`Or) t =
+      let paren ?(cond=false) f =
+        if cond || OpamFormatConfig.(!r.all_parens)
+        then Printf.sprintf "(%s)" f else f
+      in
+      match t with
+      | FBool b    -> string_of_bool b
+      | FString s  -> Printf.sprintf "%S" s
+      | FIdent (pkgs,var,converter) ->
+        OpamStd.List.concat_map "+"
+          (function None -> "_" | Some p -> OpamPackage.Name.to_string p) pkgs ^
+        (if pkgs <> [] then ":" else "") ^
+        OpamVariable.to_string var ^
+        (match converter with
+         | Some (it,ifu) -> "?"^it^":"^ifu
+         | None -> "")
+      | FOp(e,s,f) ->
+        paren ~cond:(context <> `Or && context <> `And)
+          (Printf.sprintf "%s %s %s"
+             (aux ~context:`Relop e) (OpamPrinter.relop s) (aux ~context:`Relop f))
+      | FAnd (e,f) ->
+        paren ~cond:(context <> `Or && context <> `And)
+          (Printf.sprintf "%s & %s" (aux ~context:`And e) (aux ~context:`And f))
+      | FOr (e,f)  ->
+        paren ~cond:(context <> `Or)
+          (Printf.sprintf "%s | %s" (aux e) (aux f))
+      | FNot e     ->
+        paren ~cond:(context = `Relop)
+          (Printf.sprintf "!%s" (aux ~context:`Not e))
+      | FDefined e ->
+        paren ~cond:(context = `Relop)
+          (Printf.sprintf "?%s" (aux ~context:`Defined e))
+      | FUndef f -> Printf.sprintf "#undefined(%s)" (aux f)
+    in
+    aux t
+  in
+
+  let value_string ?default = function
+    | FBool b -> string_of_bool b
+    | FString s -> s
+    | FUndef f ->
+      (match default with
+       | Some d -> d
+       | None -> failwith ("Undefined string filter value: "^to_string f))
+    | e -> raise (Invalid_argument ("value_string: "^to_string e))
+  in
+
+  let string_interp_regex =
+    let open Re in
+    let notclose =
+      rep (alt [
+          diff notnl (set "}");
+          seq [char '}'; alt [diff notnl (set "%"); stop] ]
+        ])
+    in
+    compile (alt [
+        str "%%";
+        seq [str "%{"; group (greedy notclose); opt (group (str "}%"))];
+      ])
+  in
+
+  let default fident = match default, partial with
+    | None, false -> None
+    | Some df, false -> Some (df fident)
+    | None, true -> Some (Printf.sprintf "%%{%s}%%" fident)
+    | Some df, true -> Some (Printf.sprintf "%%{%s}%%" (df fident))
+  in
+  let env v =
+    if partial then
+      match env v with
+      | Some (S s) -> Some (S (escape_expansions s))
+      | x -> x
+    else env v
+  in
+  let f g =
+    let str = Re.Group.get g 0 in
+    if str = "%%" then (if partial then "%%" else "%")
+    else if not (OpamStd.String.ends_with ~suffix:"}%" str) then
+      str
+    else
+      let fident = String.sub str 2 (String.length str - 4) in
+      resolve_ident ~no_undef_expand:partial env (filter_ident_of_string fident)
+      |> value_string ?default:(default fident)
+  in
+  Re.replace string_interp_regex ~f text
+
 let render_opam_build opam_name env (commands: OpamTypes.command list) =
   let render_args args =
     List.map
       (* XXX: We ignore filters for now *)
       (fun (arg, _filter) -> match arg with
          | OpamTypes.CString arg ->
-           OpamFilter.expand_string ~partial:true env arg
+           expand_string ~partial:true env arg
          | OpamTypes.CIdent name ->
            (match name with
             | "name" -> opam_name
