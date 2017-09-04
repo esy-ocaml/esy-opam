@@ -1,6 +1,6 @@
 {
   "name": "@esy-ocaml/esy-opam",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "Converter from opam to esy's package.json",
   "devDependencies": {
     "browserify": "^14.4.0",
