@@ -11,6 +11,9 @@ type t = {
   ocaml_version_constaint : string option;
 
   substs : string list;
+
+  patches : string list;
+
   (* list of expanded build commands *)
   build : string list list;
   (* list of expanded install commands *)
@@ -461,6 +464,11 @@ let render_opam opam_name opam_version opam =
   let ocaml_version_constaint = render_opam_available (OpamFile.OPAM.available opam) in
   let dependencies = render_opam_depends (OpamFile.OPAM.depends opam) in
   let optional_dependencies = render_opam_depends (OpamFile.OPAM.depopts opam) in
+  let patches =
+    List.map
+      (fun (basename, _) -> OpamFilename.Base.to_string basename)
+      (OpamFile.OPAM.patches opam)
+  in
   let substs = List.map OpamFilename.Base.to_string (OpamFile.OPAM.substs opam) in
   let build = render_opam_build opam_name env (OpamFile.OPAM.build opam) in
   let install = render_opam_build opam_name env (OpamFile.OPAM.install opam) in
@@ -478,6 +486,7 @@ let render_opam opam_name opam_version opam =
     optional_dependencies;
     ocaml_version_constaint;
     substs;
+    patches;
     build;
     install;
     exported_env;

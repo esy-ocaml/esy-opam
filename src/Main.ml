@@ -139,7 +139,8 @@ let render_opam opam_name opam_version opam =
       build;
       exportedEnv;
       buildsInSource = Js.Boolean.to_js_boolean true;
-    }
+    };
+    _esy_opam_patches = Array.of_list pkg.patches;
   }]
 
 let version_compare a b =
