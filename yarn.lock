@@ -187,10 +187,6 @@ browserify@^14.4.0:
     vm-browserify "~0.0.1"
     xtend "^4.0.0"
 
-bs-node@andreypopp/bs-node:
-  version "1.0.0"
-  resolved "https://codeload.github.com/andreypopp/bs-node/tar.gz/27cc880a0ecbe0db6dc0111bc1625df5cdb84134"
-
 bs-platform@^1.7.4:
   version "1.8.1"
   resolved "https://registry.yarnpkg.com/bs-platform/-/bs-platform-1.8.1.tgz#467beaa28756b0e67ddc340274de1759caba0429"
@@ -613,14 +609,6 @@ pbkdf2@^3.0.3:
     ripemd160 "^2.0.1"
     safe-buffer "^5.0.1"
     sha.js "^2.4.8"
-
-ppx_let@andreypopp/ppx_let:
-  version "0.0.0"
-  resolved "https://codeload.github.com/andreypopp/ppx_let/tar.gz/63d3caf4b31498cf459c3765335e62347665615e"
-
-ppx_let_promise@andreypopp/ppx_let_promise:
-  version "1.0.0"
-  resolved "https://codeload.github.com/andreypopp/ppx_let_promise/tar.gz/127a5b60cffb7c3b929d18b7ccab7613cc803ca8"
 
 process-nextick-args@~1.0.6:
   version "1.0.7"
