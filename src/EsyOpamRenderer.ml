@@ -29,6 +29,15 @@ module CleanupRe = struct
   let find_non_numbers_re =
     make_global_re "[^0-9]"
 
+  let find_non_version_re =
+    make_global_re "[^0-9\.]"
+
+  let find_non_tag_re =
+    make_global_re "[^0-9a-zA-Z\.\-]+"
+
+  let find_numbers_re =
+    make_global_re "^[0-9]+$"
+
   let find_leading_zeroes_re =
     make_global_re "^0+"
 
@@ -51,55 +60,78 @@ let to_env_name name =
   |> Js.String.replaceByRe CleanupRe.find_dash_re "_"
 
 let to_npm_version version =
-  let norm_version_segment v =
-    let v =
-      v
-      |> Js.String.replaceByRe CleanupRe.find_non_numbers_re ""
+
+  let normalize_tag tag =
+    tag
+    |> Js.String.replaceByRe CleanupRe.find_non_tag_re ""
+  in
+
+  let normalize_version_segment version =
+    let version =
+      version
       |> Js.String.replaceByRe CleanupRe.find_leading_zeroes_re ""
     in
-    if v = "" then "0" else v
+    match version with
+    | "" -> "0"
+    | _ ->version
   in
-  let (version, suffix) = if Js.String.includes "+" version then
-      let parts = Js.String.splitAtMost ~limit:2 "+" version in
-      let version = Array.get parts 0 and suffix = Array.get parts 1 in
-      let suffix = Js.String.replaceByRe CleanupRe.find_non_numbers_re "" suffix in
-      (version, suffix)
-    else
-      (version, "")
-  in
-  let parts = Array.to_list (Js.String.splitAtMost ~limit:3 "." version) in
-  match parts with
-  | major::[] ->
-    let major = (norm_version_segment major) in
-    let minor = (norm_version_segment suffix) in
-    major ^ "." ^ minor ^ ".0"
-  | major::minor::[] ->
-    let major = (norm_version_segment major) in
-    let minor = (norm_version_segment (minor ^ suffix)) in
-    major ^ "." ^ minor ^ ".0"
-  | major::minor::patch::[] ->
-    let major = (norm_version_segment major) in
-    let minor = (norm_version_segment minor) in
-    let patch = (norm_version_segment patch) in
-    major ^ "." ^ minor ^ "." ^ patch
-  | _ ->
-    version
 
-let render_relop (op : OpamParserTypes.relop) =
+  let normalize_version version =
+    let parts = Array.to_list (Js.String.splitAtMost ~limit:3 "." version) in
+    match parts with
+    | major::[] ->
+      let major = normalize_version_segment major in
+      major ^ ".0.0"
+
+    | major::minor::[] ->
+      let major = normalize_version_segment major in
+      let minor = normalize_version_segment minor in
+      major ^ "." ^ minor ^ ".0"
+
+    | major::minor::patch::[] ->
+      let major = normalize_version_segment major in
+      let minor = normalize_version_segment minor in
+      let patch = normalize_version_segment patch in
+      major ^ "." ^ minor ^ "." ^ patch
+    | _ ->
+      version
+  in
+
+  let converted =
+    (* Important to recreate regex as it's stateful *)
+    let find_non_version_re = CleanupRe.make_global_re "[^0-9\.]" in
+    match Js.Re.exec version find_non_version_re with
+    | Some m ->
+      let idx = Js.Re.index m in
+      let tag = Js.String.substringToEnd ~from:idx version in
+      let version = Js.String.substring ~from:0 ~to_:idx version in
+      let version = normalize_version version in
+      let tag = normalize_tag tag in
+      version ^ "-" ^ tag
+    | None ->
+      normalize_version version
+  in
+  converted
+
+let to_npm_relop (op : OpamParserTypes.relop) =
   match op with
-  | `Leq -> " <= "
-  | `Lt -> " < "
-  | `Neq -> "!="
-  | `Eq -> "="
-  | `Geq -> " >= "
-  | `Gt -> " > "
+  | `Leq -> Some " <= "
+  | `Lt -> Some " < "
+  | `Eq -> Some "="
+  | `Geq -> Some " >= "
+  | `Gt -> Some " > "
+  | `Neq -> None
 
 let rec render_filter (filter: OpamTypes.filter) =
   match filter with
   | OpamTypes.FBool _ -> ""
   | OpamTypes.FString s -> to_npm_version s
   | OpamTypes.FIdent _ -> ""
-  | OpamTypes.FOp (a, op, b) -> (render_filter a) ^ (render_relop op) ^ (render_filter b)
+  | OpamTypes.FOp (a, op, b) ->
+    (match to_npm_relop op with
+     | Some op ->
+       (render_filter a) ^ op ^ (render_filter b)
+     | None -> "")
   | OpamTypes.FAnd (a, b) -> (render_filter a) ^ " " ^ (render_filter b)
   | OpamTypes.FOr (a, b) -> (render_filter a) ^ " || " ^ (render_filter b)
   | OpamTypes.FNot _ -> ""
@@ -112,7 +144,10 @@ let rec render_formula formula =
     | OpamTypes.Filter item ->
       render_filter item
     | OpamTypes.Constraint (op, item) ->
-      (render_relop op) ^ (render_filter item)
+      (match to_npm_relop op with
+       | Some op ->
+         op ^ (render_filter item)
+       | None -> "")
   in
   match formula with
   | OpamFormula.Empty -> "*"
@@ -322,16 +357,26 @@ let render_opam_build opam_name env (commands: OpamTypes.command list) =
 let render_opam_available (filter: OpamTypes.filter) =
   let rec find_constraints filter result =
     match filter with
+
     | OpamTypes.FOp (OpamTypes.FIdent (_, var, _), op, OpamTypes.FString version) ->
       let var = OpamVariable.to_string var in
-      if var == "ocaml-version" then
-        let constr = (render_relop op) ^ (to_npm_version version) in
-        constr::result
+      if var == "ocaml-version" || var == "compiler" then
+        match to_npm_relop op with
+        | Some op ->
+          let constr = op ^ (to_npm_version version) in
+          constr::result
+        | None -> result
       else
         result
+
     | OpamTypes.FAnd (l,r)
     | OpamTypes.FOr (l,r) ->
       (find_constraints l []) @ (find_constraints r []) @ result
+
+    | OpamTypes.FIdent (_, var, _)
+      when OpamVariable.to_string var == "preinstalled" ->
+      "=system"::result
+
     | OpamTypes.FOp _
     | OpamTypes.FBool _
     | OpamTypes.FString _

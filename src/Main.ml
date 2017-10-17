@@ -141,3 +141,6 @@ let render_opam opam_name opam_version opam =
       buildsInSource = Js.Boolean.to_js_boolean true;
     }
   }]
+
+let version_compare a b =
+  OpamVersionCompare.compare a b
