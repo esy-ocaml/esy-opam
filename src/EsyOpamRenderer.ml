@@ -2,10 +2,14 @@
 type t = {
   name : string;
   version : string;
+
   (* list of (name, constraint) pairs for regular dependencies *)
   dependencies : (string * string) list;
   (* list of (name, constraint) pairs for optional dependencies *)
   optional_dependencies : (string * string) list;
+
+  ocaml_version_constaint : string option;
+
   substs : string list;
   (* list of expanded build commands *)
   build : string list list;
@@ -90,19 +94,19 @@ let render_relop (op : OpamParserTypes.relop) =
   | `Geq -> " >= "
   | `Gt -> " > "
 
+let rec render_filter (filter: OpamTypes.filter) =
+  match filter with
+  | OpamTypes.FBool _ -> ""
+  | OpamTypes.FString s -> to_npm_version s
+  | OpamTypes.FIdent _ -> ""
+  | OpamTypes.FOp (a, op, b) -> (render_filter a) ^ (render_relop op) ^ (render_filter b)
+  | OpamTypes.FAnd (a, b) -> (render_filter a) ^ " " ^ (render_filter b)
+  | OpamTypes.FOr (a, b) -> (render_filter a) ^ " || " ^ (render_filter b)
+  | OpamTypes.FNot _ -> ""
+  | OpamTypes.FDefined _ -> ""
+  | OpamTypes.FUndef _ -> ""
+
 let rec render_formula formula =
-  let rec render_filter (filter: OpamTypes.filter) =
-    match filter with
-    | OpamTypes.FBool _ -> ""
-    | OpamTypes.FString s -> to_npm_version s
-    | OpamTypes.FIdent _ -> ""
-    | OpamTypes.FOp (a, op, b) -> (render_filter a) ^ (render_relop op) ^ (render_filter b)
-    | OpamTypes.FAnd (a, b) -> (render_filter a) ^ " " ^ (render_filter b)
-    | OpamTypes.FOr (a, b) -> (render_filter a) ^ " || " ^ (render_filter b)
-    | OpamTypes.FNot _ -> ""
-    | OpamTypes.FDefined _ -> ""
-    | OpamTypes.FUndef _ -> ""
-  in
   let render_item item =
     match item with
     | OpamTypes.Filter item ->
@@ -155,7 +159,7 @@ let expand_string ?(partial=false) ?default env text =
        XXX: We don't desugar it!
        let enable = OpamVariable.of_string "enable" in
        if packages <> [] && var = enable && converter = None then
-        packages, OpamVariable.of_string "installed", Some ("enable","disable")
+       packages, OpamVariable.of_string "installed", Some ("enable","disable")
        else fident
     *)
   in
@@ -315,6 +319,31 @@ let render_opam_build opam_name env (commands: OpamTypes.command list) =
     (fun (args, _filter) -> render_args args)
     commands
 
+let render_opam_available (filter: OpamTypes.filter) =
+  let rec find_constraints filter result =
+    match filter with
+    | OpamTypes.FOp (OpamTypes.FIdent (_, var, _), op, OpamTypes.FString version) ->
+      let var = OpamVariable.to_string var in
+      if var == "ocaml-version" then
+        let constr = (render_relop op) ^ (to_npm_version version) in
+        constr::result
+      else
+        result
+    | OpamTypes.FAnd (l,r)
+    | OpamTypes.FOr (l,r) ->
+      (find_constraints l []) @ (find_constraints r []) @ result
+    | OpamTypes.FOp _
+    | OpamTypes.FBool _
+    | OpamTypes.FString _
+    | OpamTypes.FIdent _
+    | OpamTypes.FNot _
+    | OpamTypes.FDefined _
+    | OpamTypes.FUndef _ -> result
+  in
+  match find_constraints filter [] with
+  | [] -> None
+  | constraints -> Some (String.concat " " constraints)
+
 let render_opam opam_name opam_version opam =
   let version = to_npm_version opam_version in
   let env (var: OpamVariable.Full.t) =
@@ -384,6 +413,7 @@ let render_opam opam_name opam_version opam =
     in res
   in
 
+  let ocaml_version_constaint = render_opam_available (OpamFile.OPAM.available opam) in
   let dependencies = render_opam_depends (OpamFile.OPAM.depends opam) in
   let optional_dependencies = render_opam_depends (OpamFile.OPAM.depopts opam) in
   let substs = List.map OpamFilename.Base.to_string (OpamFile.OPAM.substs opam) in
@@ -401,6 +431,7 @@ let render_opam opam_name opam_version opam =
     version;
     dependencies;
     optional_dependencies;
+    ocaml_version_constaint;
     substs;
     build;
     install;
