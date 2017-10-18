@@ -14,7 +14,21 @@ Then see `dist/esy-opam.js.flow` for the available API.
 
 ## Development
 
+Initialize and clone submodules:
+
 ```
 % make bootstrap
-% make build
+```
+
+Watch for changes and rebuild instantly:
+
+```
+% make watch
+```
+
+Publishing a new version (choose one of `major`, `minor` or `patch` for
+`VERSION`):
+
+```
+% make VERSION=major|minor|patch bump-version publish
 ```
