@@ -32,6 +32,17 @@ clean:
 watch: prepare
 	$(BIN)/bsb -w -clean-world -make-world
 
+bump-version:
+ifndef VERSION
+	@echo 'Provide VERSION=major|minor|patch, exiting...'
+	@exit 1
+endif
+	@npm version $(VERSION)
+
+publish:
+	@npm publish
+	@git push origin --tags
+
 dist: dist/esy-opam.js dist/esy-opam.js.flow
 
 .PHONY: dist/esy-opam.js
