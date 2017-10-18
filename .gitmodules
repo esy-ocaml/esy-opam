@@ -16,3 +16,4 @@
 [submodule "opam-file-format"]
 	path = opam-file-format
 	url = https://github.com/ocaml/opam-file-format.git
+	ignore = untracked
