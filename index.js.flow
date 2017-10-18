@@ -1,0 +1,28 @@
+// @flow
+
+declare opaque type OpamPackage;
+declare opaque type OpamUrl;
+
+declare type PackageJson = {
+  name: string,
+  version: string,
+  dependencies: {[name: string]: string},
+  peerDependencies: {[name: string]: string},
+  devDependencies: {[name: string]: string},
+  esy: {
+    build: Array<Array<string>>,
+    buildsInSource: boolean,
+    exportedEnv: {
+      [name: string]: {
+        scope?: 'global',
+        val: string,
+      }
+    }
+  }
+};
+
+declare export function parseOpam(data: string): OpamPackage;
+declare export function parseOpamUrl(data: string): OpamUrl;
+declare export function renderOpamUrl(opamUrl: OpamUrl): {url: string, checksum: Array<{kind: string, contents: string}>};
+declare export function renderOpam(name: string, version: string, opam: OpamPackage): PackageJson;
+declare export function versionCompare(a: string, b: string): number;

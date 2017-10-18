@@ -32,9 +32,13 @@ clean:
 watch: prepare
 	$(BIN)/bsb -w -clean-world -make-world
 
-dist: dist/esy-opam.js
+dist: dist/esy-opam.js dist/esy-opam.js.flow
 
 .PHONY: dist/esy-opam.js
 dist/esy-opam.js: build
 	mkdir -p $(@D)
 	./node_modules/.bin/browserify --standalone EsyOpam --node --outfile $(@) ./index.js
+
+dist/esy-opam.js.flow: index.js.flow
+	mkdir -p $(@D)
+	cp ./index.js.flow ./dist/esy-opam.js.flow
