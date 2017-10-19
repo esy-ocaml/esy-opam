@@ -36,7 +36,7 @@ module CleanupRe = struct
     make_global_re "[^0-9\.]"
 
   let find_non_tag_re =
-    make_global_re "[^0-9a-zA-Z\.\-]+"
+    make_global_re "[^0-9a-zA-Z\-]+"
 
   let find_numbers_re =
     make_global_re "^[0-9]+$"
@@ -101,8 +101,15 @@ let to_npm_version version =
   in
 
   let converted =
-    (* Important to recreate regex as it's stateful *)
+    (* Important to recreate regexes as they are stateful *)
     let find_non_version_re = CleanupRe.make_global_re "[^0-9\.]" in
+    let is_prefixed_with_v = CleanupRe.make_global_re "^v[0-9]" in
+
+    let version = match Js.Re.exec version is_prefixed_with_v with
+      | Some _ -> Js.String.substringToEnd ~from:1 version
+      | None -> version
+    in
+
     match Js.Re.exec version find_non_version_re with
     | Some m ->
       let idx = Js.Re.index m in
