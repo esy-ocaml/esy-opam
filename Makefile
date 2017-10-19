@@ -32,12 +32,14 @@ clean:
 watch: prepare
 	$(BIN)/bsb -w -clean-world -make-world
 
-bump-version: dist
-ifndef VERSION
-	@echo 'Provide VERSION=major|minor|patch, exiting...'
-	@exit 1
-endif
-	@npm version $(VERSION)
+bump-patch-version:
+	@npm version patch
+
+bump-minor-version:
+	@npm version minor
+
+bump-major-version:
+	@npm version major
 
 publish: dist
 	@npm publish
