@@ -43,7 +43,7 @@ bump-major-version:
 
 publish: dist
 	@npm publish
-	@git push origin --tags
+	@git push && git push origin --tags
 
 dist: dist/esy-opam.js dist/esy-opam.js.flow
 
