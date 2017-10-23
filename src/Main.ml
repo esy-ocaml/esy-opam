@@ -17,19 +17,19 @@ let fixup pkg =
 
   let fixup_dependencies pkg =
     let exclude_dependencies = StringSet.of_list [
-        "@opam-alpha/base-no-ppx";
+        "@opam/base-no-ppx";
       ]
     in
     let exclude_optional_dependencies = StringSet.of_list [
-        "@opam-alpha/conf-libev";
-        "@opam-alpha/lablgtk";
-        "@opam-alpha/ssl";
-        "@opam-alpha/mirage-xen";
-        "@opam-alpha/mirage-xen-ocaml";
-        "@opam-alpha/tyxml";
-        "@opam-alpha/reactiveData";
-        "@opam-alpha/deriving";
-        "@opam-alpha/js_of_ocaml";
+        "@opam/conf-libev";
+        "@opam/lablgtk";
+        "@opam/ssl";
+        "@opam/mirage-xen";
+        "@opam/mirage-xen-ocaml";
+        "@opam/tyxml";
+        "@opam/reactiveData";
+        "@opam/deriving";
+        "@opam/js_of_ocaml";
       ]
     in
     let is_not_excluded_with excluded (name, _) =

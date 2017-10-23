@@ -51,7 +51,7 @@ module CleanupRe = struct
 end
 
 let to_npm_name name =
-  "@opam-alpha/" ^ name
+  "@opam/" ^ name
 
 let to_env_name name =
   name
