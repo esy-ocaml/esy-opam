@@ -6,13 +6,13 @@ module StringSet = Set.Make(String)
 let fixup pkg =
   let open EsyOpamRenderer in
 
-  let opam_install = ["sh"; "-c"; "(opam-installer --prefix=$cur__install || true)"] in
+  let opam_install = ["sh"; "-c"; "(esy-installer || true)"] in
 
   let subst_dependency =
-    ("substs", "esy-ocaml/substs")
+    ("@esy-ocaml/substs", "^0.0.1")
   in
   let opam_installer_dependency =
-    ("opam-installer-bin", "esy-ocaml/opam-installer-bin")
+    ("@esy-ocaml/esy-installer", "^0.0.0")
   in
 
   let fixup_dependencies pkg =
