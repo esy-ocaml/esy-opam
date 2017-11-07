@@ -36,5 +36,5 @@ Publishing a new version (choose one of `major`, `minor` or `patch` for
 `VERSION`):
 
 ```
-% make VERSION=major|minor|patch bump-version publish
+% make bump-{patch,minor,major}-version publish
 ```
