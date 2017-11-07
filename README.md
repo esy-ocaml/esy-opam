@@ -14,6 +14,12 @@ Then see `dist/esy-opam.js.flow` for the available API.
 
 ## Development
 
+Install Esy:
+
+```
+% npm install -g esy
+```
+
 Initialize and clone submodules:
 
 ```

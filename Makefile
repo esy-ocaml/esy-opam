@@ -21,7 +21,7 @@ opam/src/core/opamCompat.mli: opam/src/core/opamCompat.mli.4.02
 bootstrap:
 	git submodule init
 	git submodule update
-	npm install
+	esy install
 
 build: prepare
 	$(BIN)/bsb -make-world

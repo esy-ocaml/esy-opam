@@ -1,0 +1,17 @@
+{
+  "name": "@esy-ocaml/esy-opam",
+  "version": "0.0.7",
+  "description": "Converter from opam to esy's package.json",
+  "devDependencies": {
+    "browserify": "^14.4.0",
+    "bs-platform": "1.8.1"
+  },
+  "files": [
+    "dist/"
+  ],
+  "main": "./dist/esy-opam.js",
+  "dependencies": {
+    "@opam/merlin": "^3.0.3",
+    "ocaml": "^4.2.3001"
+  }
+}
