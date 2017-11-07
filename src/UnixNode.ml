@@ -169,13 +169,8 @@ let unix_open_flag_to_node_open_flag (flag: open_flag) =
   | O_CLOEXEC -> ""
 
 external date_now : unit -> float = "date_now" [@@bs.val "Date.now"]
-external node_process_cwd : unit -> string = "chdir" [@@bs.module "process"]
-external node_process_kill : int -> int -> unit = "kill" [@@bs.module "process"]
-external node_process_chdir : string -> unit = "chdir" [@@bs.module "process"]
-external node_process_getuid: unit -> int = "getuid" [@@bs.module "process"]
-external node_process_getgroups: unit -> int array = "getgroups" [@@bs.module "process"]
-external node_process_env_USER : string = "" [@@bs.val "process.env.USER"]
-external node_process_pid : int = "" [@@bs.val "process.pid"]
+
+external exec_sync : string -> NodeBuffer.t = "execSync" [@@bs.module "child_process"]
 
 let node_stats_to_unix_stats stat =
   {
@@ -211,7 +206,7 @@ let unlink filename =
   node_fs_unlinkSync filename
 
 let getuid () =
-  node_process_getuid ()
+  NodeProcess.getuid ()
 
 let symlink ?to_dir source dest =
   node_fs_symlinkSync source dest (match to_dir with
@@ -219,7 +214,7 @@ let symlink ?to_dir source dest =
       | Some is_dir -> if is_dir then "dir" else "file")
 
 let getgroups() =
-  node_process_getgroups ()
+  NodeProcess.getgroups ()
 
 let stat filename =
   let stat = node_fs_statSync filename in
@@ -236,7 +231,7 @@ let fstat fd =
   let stat = node_fs_fstatSync fd in
   node_stats_to_unix_stats stat
 
-let getcwd () = node_process_cwd ()
+let getcwd () = NodeProcess.cwd ()
 
 let chmod filename mode =
   node_fs_chmodSync filename mode
@@ -315,7 +310,7 @@ let gmtime _f = {
   tm_isdst = true; (* Daylight time savings in effect *)
 }
 
-let chdir = node_process_chdir
+let chdir = NodeProcess.chdir
 
 let descr_of_in_channel _in_channel = 1
 let descr_of_out_channel _out_channel = 1
@@ -335,11 +330,27 @@ let close_process_in _in_channel = 0
 
 let isatty _channel = true
 
+let getloginenv () =
+  NodeProcess.env "USER"
+
 let getlogin () =
-  node_process_env_USER
+  let username = List.fold_left Js.Option.firstSome None [
+    NodeProcess.env "LOGNAME";
+    NodeProcess.env "USER";
+    NodeProcess.env "LNAME";
+    NodeProcess.env "USERNAME"
+  ] in
+  let exec_id () =
+    exec_sync "id -un"
+    |> NodeBuffer.to_string
+    |> Js.String.trim
+  in
+  match username with
+  | Some username -> username
+  | None -> exec_id ()
 
 let getpid () =
-  node_process_pid
+  NodeProcess.pid
 
 let stdout = 1
 let stdin = 2
@@ -352,7 +363,7 @@ let inet_addr_of_string addr = (addr: inet_addr)
 let create_process_env _prog _args _env _new_stdin _new_stdout _new_stderr = 1
 
 let kill pid signum =
-  node_process_kill pid signum
+  NodeProcess.kill pid signum
 
 let alarm _sec = ()
 let waitpid _flags _pid = (0, WEXITED 0)
