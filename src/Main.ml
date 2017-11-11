@@ -125,6 +125,8 @@ let render_opam opam_name opam_version opam =
   let dependencies = to_npm_dependencies (pkg.dependencies @
                                           pkg.optional_dependencies) in
 
+  let devDependencies = to_npm_dependencies pkg.dev_dependencies in
+
   let peerDependencies = match pkg.ocaml_version_constaint with
     | None -> to_npm_dependencies [("ocaml", "*")]
     | Some constr -> to_npm_dependencies [("ocaml", constr)]
@@ -135,6 +137,7 @@ let render_opam opam_name opam_version opam =
     version = pkg.version;
     dependencies;
     peerDependencies;
+    devDependencies;
     esy = {
       build;
       exportedEnv;

@@ -7,6 +7,8 @@ type t = {
   dependencies : (string * string) list;
   (* list of (name, constraint) pairs for optional dependencies *)
   optional_dependencies : (string * string) list;
+  (* list of (name, constraint) pairs for optional dependencies *)
+  dev_dependencies : (string * string) list;
 
   ocaml_version_constaint : string option;
 
@@ -132,39 +134,50 @@ let to_npm_relop (op : OpamParserTypes.relop) =
   | `Gt -> Some " > "
   | `Neq -> None
 
-let rec render_filter (filter: OpamTypes.filter) =
+let rec render_filter ?(test_val=false) ?(build_val=false) (filter: OpamTypes.filter) =
   match filter with
-  | OpamTypes.FBool _ -> ""
-  | OpamTypes.FString s -> to_npm_version s
-  | OpamTypes.FIdent _ -> ""
+  | OpamTypes.FBool enabled -> (enabled, "")
+  | OpamTypes.FString s -> (true, to_npm_version s)
+  | OpamTypes.FIdent (_, name,_) ->
+      let name = OpamVariable.to_string name in
+      let enabled = match name with
+        | "test" -> test_val
+        | "build" -> build_val
+        | _ -> false
+      in
+      (enabled, "")
   | OpamTypes.FOp (a, op, b) ->
+    let (enabled_a, a) = render_filter a in
+    let (enabled_b, b) = render_filter b in
     (match to_npm_relop op with
      | Some op ->
-       (render_filter a) ^ op ^ (render_filter b)
-     | None -> "")
-  | OpamTypes.FAnd (a, b) -> (render_filter a) ^ " " ^ (render_filter b)
-  | OpamTypes.FOr (a, b) -> (render_filter a) ^ " || " ^ (render_filter b)
-  | OpamTypes.FNot _ -> ""
-  | OpamTypes.FDefined _ -> ""
-  | OpamTypes.FUndef _ -> ""
+       (enabled_a && enabled_b, a ^ op ^ b)
+     | None -> (enabled_a && enabled_b, ""))
+  | OpamTypes.FAnd (a, b) ->
+    let (enabled_a, a) = render_filter a in
+    let (enabled_b, b) = render_filter b in
+      (enabled_a && enabled_b, a ^ " " ^ b)
+  | OpamTypes.FOr (a, b) ->
+    let (enabled_a, a) = render_filter a in
+    let (enabled_b, b) = render_filter b in
+    (enabled_a || enabled_b, a ^ " || " ^ b)
+  | OpamTypes.FNot _ -> (true, "")
+  | OpamTypes.FDefined _ -> (true, "")
+  | OpamTypes.FUndef _ -> (true, "")
 
-let rec render_formula formula =
-  let render_item item =
-    match item with
-    | OpamTypes.Filter item ->
-      render_filter item
-    | OpamTypes.Constraint (op, item) ->
-      (match to_npm_relop op with
-       | Some op ->
-         op ^ (render_filter item)
-       | None -> "")
-  in
+let rec render_version_formula (formula : OpamFormula.version_formula) =
   match formula with
   | OpamFormula.Empty -> "*"
-  | OpamFormula.Atom item -> render_item item
-  | OpamFormula.Block f -> render_formula f
-  | OpamFormula.And (a, b) -> (render_formula a) ^ " " ^ (render_formula b)
-  | OpamFormula.Or (a, b) -> (render_formula a) ^ " || " ^ (render_formula b)
+  | OpamFormula.Atom (relop, version) ->
+      let relop = match to_npm_relop relop with
+      | None -> ""
+      | Some relop -> relop
+      in
+      let version = version |> OpamPackage.Version.to_string |> to_npm_version in
+      relop ^ version
+  | OpamFormula.Block f -> render_version_formula f
+  | OpamFormula.And (a, b) -> (render_version_formula a) ^ " " ^ (render_version_formula b)
+  | OpamFormula.Or (a, b) -> (render_version_formula a) ^ " || " ^ (render_version_formula b)
 
 let rec flatten_formula formula =
   match formula with
@@ -174,16 +187,18 @@ let rec flatten_formula formula =
   | OpamFormula.And (a, b) -> (flatten_formula a) @ (flatten_formula b)
   | OpamFormula.Or (a, b) -> (flatten_formula a) @ (flatten_formula b)
 
-let render_opam_depends depends =
-  (** We flatten packages formula because esy-npm cannot express formulas over
-      packages. In the current impl. we just assume thatany package mentioned
-      in original opam formula is required. *)
-  let depends = flatten_formula depends in
-  List.map (fun (name, constr) ->
-      let name = name |> OpamPackage.Name.to_string |> to_npm_name in
-      let constr = render_formula constr in
-      (name, constr)
-    ) depends
+let render_opam_depends env (depends : OpamTypes.filtered_formula) =
+
+  let render ((name : OpamTypes.name), formula) =
+    let name = name |> OpamPackage.Name.to_string |> to_npm_name in
+    let formula = render_version_formula formula in
+    (name, formula)
+  in
+
+  depends
+  |> OpamFilter.filter_formula ~default:true env
+  |> flatten_formula
+  |> List.map render
 
 
 (** This is a modified copy of OpamFilter.expand_string function
@@ -469,8 +484,30 @@ let render_opam opam_name opam_version opam =
   in
 
   let ocaml_version_constaint = render_opam_available (OpamFile.OPAM.available opam) in
-  let dependencies = render_opam_depends (OpamFile.OPAM.depends opam) in
-  let optional_dependencies = render_opam_depends (OpamFile.OPAM.depopts opam) in
+
+  (** Env to eval filters for dep contraints *)
+  let make_depends_env ~build ~test (var: OpamVariable.Full.t) =
+    let variable = OpamVariable.Full.variable var in
+    let scope = OpamVariable.Full.scope var in
+    let name = OpamVariable.to_string variable in
+    match (scope, name) with
+      | (OpamVariable.Full.Global, "build") -> Some (OpamVariable.bool build)
+      | (OpamVariable.Full.Global, "test") -> Some (OpamVariable.bool test)
+      | (_, _name) -> None
+  in
+
+  let reg_depends_env = make_depends_env ~build:true ~test:false in
+  let test_depends_env = make_depends_env ~build:false ~test:true in
+
+  let depends = OpamFile.OPAM.depends opam in
+  let depopts = OpamFile.OPAM.depopts opam in
+
+  let dependencies = render_opam_depends reg_depends_env depends in
+  let optional_dependencies = render_opam_depends reg_depends_env depopts in
+  let dev_dependencies =
+    render_opam_depends test_depends_env depends
+    |> List.filter (fun item -> not (List.mem item dependencies))
+  in
   let patches =
     List.map
       (fun (basename, _) -> OpamFilename.Base.to_string basename)
@@ -491,6 +528,7 @@ let render_opam opam_name opam_version opam =
     version;
     dependencies;
     optional_dependencies;
+    dev_dependencies;
     ocaml_version_constaint;
     substs;
     patches;
