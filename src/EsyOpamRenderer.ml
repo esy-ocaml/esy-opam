@@ -1,3 +1,6 @@
+module Lib = EsyOpamLib
+module Version = EsyOpamVersion
+
 (* Info from OPAM file needed to construct the Esy package.json *)
 type t = {
   name : string;
@@ -24,106 +27,18 @@ type t = {
   exported_env : (string * string) list;
 }
 
-module CleanupRe = struct
-  let make_global_re v =
-    Js.Re.fromStringWithFlags ~flags:"g" v
-
-  let find_underscore_re =
-    make_global_re "(_+)"
-
-  let find_non_numbers_re =
-    make_global_re "[^0-9]"
-
-  let find_non_version_re =
-    make_global_re "[^0-9\.]"
-
-  let find_non_tag_re =
-    make_global_re "[^0-9a-zA-Z\-]+"
-
-  let find_numbers_re =
-    make_global_re "^[0-9]+$"
-
-  let find_leading_zeroes_re =
-    make_global_re "^0+"
-
-  let find_at_re= make_global_re "@"
-  let find_dash_re = make_global_re "\-"
-  let find_slash_re = make_global_re "\/"
-  let find_dot_re = make_global_re "\."
-end
-
 let to_npm_name name =
   "@opam/" ^ name
 
 let to_env_name name =
   name
   (* This has to be done before the other replacements. *)
-  |> Js.String.replaceByRe CleanupRe.find_underscore_re "$1__"
-  |> Js.String.replaceByRe CleanupRe.find_at_re ""
-  |> Js.String.replaceByRe CleanupRe.find_dot_re "__dot__"
-  |> Js.String.replaceByRe CleanupRe.find_slash_re "__slash__"
-  |> Js.String.replaceByRe CleanupRe.find_dash_re "_"
+  |> Js.String.replaceByRe Lib.Re.find_underscore_re "$1__"
+  |> Js.String.replaceByRe Lib.Re.find_at_re ""
+  |> Js.String.replaceByRe Lib.Re.find_dot_re "__dot__"
+  |> Js.String.replaceByRe Lib.Re.find_slash_re "__slash__"
+  |> Js.String.replaceByRe Lib.Re.find_dash_re "_"
 
-let to_npm_version version =
-
-  let normalize_tag tag =
-    tag
-    |> Js.String.replaceByRe CleanupRe.find_non_tag_re ""
-  in
-
-  let normalize_version_segment version =
-    let version =
-      version
-      |> Js.String.replaceByRe CleanupRe.find_leading_zeroes_re ""
-    in
-    match version with
-    | "" -> "0"
-    | _ ->version
-  in
-
-  let normalize_version version =
-    let parts = Array.to_list (Js.String.splitAtMost ~limit:3 "." version) in
-    match parts with
-    | major::[] ->
-      let major = normalize_version_segment major in
-      major ^ ".0.0"
-
-    | major::minor::[] ->
-      let major = normalize_version_segment major in
-      let minor = normalize_version_segment minor in
-      major ^ "." ^ minor ^ ".0"
-
-    | major::minor::patch::[] ->
-      let major = normalize_version_segment major in
-      let minor = normalize_version_segment minor in
-      let patch = normalize_version_segment patch in
-      major ^ "." ^ minor ^ "." ^ patch
-    | _ ->
-      version
-  in
-
-  let converted =
-    (* Important to recreate regexes as they are stateful *)
-    let find_non_version_re = CleanupRe.make_global_re "[^0-9\.]" in
-    let is_prefixed_with_v = CleanupRe.make_global_re "^v[0-9]" in
-
-    let version = match Js.Re.exec version is_prefixed_with_v with
-      | Some _ -> Js.String.substringToEnd ~from:1 version
-      | None -> version
-    in
-
-    match Js.Re.exec version find_non_version_re with
-    | Some m ->
-      let idx = Js.Re.index m in
-      let tag = Js.String.substringToEnd ~from:idx version in
-      let version = Js.String.substring ~from:0 ~to_:idx version in
-      let version = normalize_version version in
-      let tag = normalize_tag tag in
-      version ^ "-" ^ tag
-    | None ->
-      normalize_version version
-  in
-  converted
 
 let to_npm_relop (op : OpamParserTypes.relop) =
   match op with
@@ -137,7 +52,7 @@ let to_npm_relop (op : OpamParserTypes.relop) =
 let rec render_filter ?(test_val=false) ?(build_val=false) (filter: OpamTypes.filter) =
   match filter with
   | OpamTypes.FBool enabled -> (enabled, "")
-  | OpamTypes.FString s -> (true, to_npm_version s)
+  | OpamTypes.FString s -> (true, Version.to_npm_version s)
   | OpamTypes.FIdent (_, name,_) ->
       let name = OpamVariable.to_string name in
       let enabled = match name with
@@ -173,7 +88,7 @@ let rec render_version_formula (formula : OpamFormula.version_formula) =
       | None -> ""
       | Some relop -> relop
       in
-      let version = version |> OpamPackage.Version.to_string |> to_npm_version in
+      let version = version |> OpamPackage.Version.to_string |> Version.to_npm_version in
       relop ^ version
   | OpamFormula.Block f -> render_version_formula f
   | OpamFormula.And (a, b) -> (render_version_formula a) ^ " " ^ (render_version_formula b)
@@ -388,7 +303,7 @@ let render_opam_available (filter: OpamTypes.filter) =
       if var == "ocaml-version" || var == "compiler" then
         match to_npm_relop op with
         | Some op ->
-          let constr = op ^ (to_npm_version version) in
+          let constr = op ^ (Version.to_npm_version version) in
           constr::result
         | None -> result
       else
@@ -415,7 +330,7 @@ let render_opam_available (filter: OpamTypes.filter) =
   | constraints -> Some (String.concat " " constraints)
 
 let render_opam opam_name opam_version opam =
-  let version = to_npm_version opam_version in
+  let version = Version.to_npm_version opam_version in
   let env (var: OpamVariable.Full.t) =
     let variable = OpamVariable.Full.variable var in
     let scope = OpamVariable.Full.scope var in
