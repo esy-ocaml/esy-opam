@@ -102,7 +102,20 @@ let rec flatten_formula formula =
   | OpamFormula.And (a, b) -> (flatten_formula a) @ (flatten_formula b)
   | OpamFormula.Or (a, b) -> (flatten_formula a) @ (flatten_formula b)
 
-let render_opam_depends env (depends : OpamTypes.filtered_formula) =
+let simplify_formula installed_packages formula =
+  let lookup f =
+    let (name, _) = f in
+    let name = OpamPackage.Name.to_string name in
+    match Lib.StringMap.find_opt name installed_packages with
+    | Some true -> `True
+    | Some false -> `False
+    | None -> `Formula (OpamFormula.Atom f)
+  in
+  match OpamFormula.partial_eval lookup formula with
+  | `Formula f -> f
+  | _ -> OpamFormula.Empty
+
+let render_opam_depends ~installed_packages env (depends : OpamTypes.filtered_formula) =
 
   let render ((name : OpamTypes.name), formula) =
     let name = name |> OpamPackage.Name.to_string |> to_npm_name in
@@ -110,8 +123,14 @@ let render_opam_depends env (depends : OpamTypes.filtered_formula) =
     (name, formula)
   in
 
+  let installed_packages = match installed_packages with
+  | Some installed_packages -> installed_packages
+  | None -> Lib.StringMap.empty
+  in
+
   depends
   |> OpamFilter.filter_formula ~default:true env
+  |> simplify_formula installed_packages
   |> flatten_formula
   |> List.map render
 
@@ -329,7 +348,7 @@ let render_opam_available (filter: OpamTypes.filter) =
   | [] -> None
   | constraints -> Some (String.concat " " constraints)
 
-let render_opam opam_name opam_version opam =
+let render_opam ?installed_packages opam_name opam_version opam =
   let version = Version.to_npm_version opam_version in
   let env (var: OpamVariable.Full.t) =
     let variable = OpamVariable.Full.variable var in
@@ -417,10 +436,14 @@ let render_opam opam_name opam_version opam =
   let depends = OpamFile.OPAM.depends opam in
   let depopts = OpamFile.OPAM.depopts opam in
 
-  let dependencies = render_opam_depends reg_depends_env depends in
-  let optional_dependencies = render_opam_depends reg_depends_env depopts in
+  let dependencies =
+    render_opam_depends ~installed_packages reg_depends_env depends
+  in
+  let optional_dependencies =
+    render_opam_depends ~installed_packages reg_depends_env depopts
+  in
   let dev_dependencies =
-    render_opam_depends test_depends_env depends
+    render_opam_depends ~installed_packages test_depends_env depends
     |> List.filter (fun item -> not (List.mem item dependencies))
   in
   let patches =

@@ -26,4 +26,14 @@ module Re = struct
   let find_dot_re = make_global "\."
 end
 
+module StringMap = struct
+  include  Map.Make(String)
 
+  let find_opt k m =
+    try
+      Some (find k m)
+    with
+      Not_found -> None
+end
+
+module StringSet = Set.Make(String)

@@ -1,6 +1,6 @@
 module OPAM = OpamFile.OPAM
 
-module StringSet = Set.Make(String)
+module Lib = EsyOpamLib
 
 (** This is the place we manually override some of the conversion results *)
 let fixup pkg =
@@ -16,11 +16,11 @@ let fixup pkg =
   in
 
   let fixup_dependencies pkg =
-    let exclude_dependencies = StringSet.of_list [
+    let exclude_dependencies = Lib.StringSet.of_list [
         "@opam/base-no-ppx";
       ]
     in
-    let exclude_optional_dependencies = StringSet.of_list [
+    let exclude_optional_dependencies = Lib.StringSet.of_list [
         "@opam/conf-libev";
         "@opam/lablgtk";
         "@opam/ssl";
@@ -33,7 +33,7 @@ let fixup pkg =
       ]
     in
     let is_not_excluded_with excluded (name, _) =
-      not (StringSet.mem name excluded)
+      not (Lib.StringSet.mem name excluded)
     in
     let optional_dependencies = 
       pkg.optional_dependencies
@@ -97,7 +97,12 @@ let render_opam_url (opam_url : OpamFile.URL.t) =
   }]
 
 let render_opam opam_name opam_version opam =
-  let pkg = EsyOpamRenderer.render_opam opam_name opam_version opam in
+  let installed_packages = Lib.StringMap.(
+    empty
+    |> add "mirage-no-xen" true
+    |> add "mirage-no-solo5" true
+  ) in
+  let pkg = EsyOpamRenderer.render_opam ~installed_packages opam_name opam_version opam in
   let pkg = fixup pkg in
 
   let to_npm_dependencies deps =
