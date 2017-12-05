@@ -1,6 +1,6 @@
 {
   "name": "@esy-ocaml/esy-opam",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "description": "Converter from opam to esy's package.json",
   "files": [
     "dist/"
