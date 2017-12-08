@@ -363,20 +363,21 @@ let render_opam ?installed_packages opam_name opam_version opam =
     let res = match (scope, name) with
 
       | (OpamVariable.Full.Package name, var) ->
-        let name = to_env_name (OpamPackage.Name.to_string name) in
+        let envname = to_env_name (OpamPackage.Name.to_string name) in
+        let npmname = to_npm_name (OpamPackage.Name.to_string name) in
         begin match var with
           | "installed" ->
-            s ("${" ^ name ^ "_installed:-false}")
+            s ("${" ^ envname ^ "_installed:-false}")
           | "enable" ->
-            s ("${" ^ name ^ "_enable:-disable}")
+            s ("${" ^ envname ^ "_enable:-disable}")
           | "version" ->
-            s ("${" ^ name ^ "_version}")
+            s ("${" ^ envname ^ "_version}")
           | "bin" ->
-            s (name ^ "__bin")
+            s ("#{" ^ npmname ^ ".bin}")
           | "share" ->
-            s (name ^ "__share")
+            s ("#{" ^ npmname ^ ".share}")
           | "lib" ->
-            s (name ^ "__lib")
+            s ("#{" ^ npmname ^ ".lib}")
           | _ ->
             s ""
         end
