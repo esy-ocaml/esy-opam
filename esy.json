@@ -4,14 +4,15 @@
   "description": "Converter from opam to esy's package.json",
   "devDependencies": {
     "browserify": "^14.4.0",
-    "bs-platform": "1.8.1"
+    "bs-platform": "1.8.1",
+    "ocaml": "~4.2.3001"
   },
   "files": [
     "dist/"
   ],
   "main": "./dist/esy-opam.js",
   "dependencies": {
-    "@opam/merlin": "^3.0.3",
-    "ocaml": "^4.2.3001"
+    "@opam/merlin": "*",
+    "ocaml": "~4.2.3001"
   }
 }
