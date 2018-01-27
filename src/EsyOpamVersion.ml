@@ -1,6 +1,15 @@
 module Lib = EsyOpamLib
 
-let to_npm_version version =
+(**
+ * major.minor.patch-tag
+ *
+ * We don't represent +build as npm ignore it during version comparison so we
+ * don't know how useful it is (anyway we order versions by OPAM versions when
+ * solving).
+ *)
+type t = (string * string * string * string option)
+
+let of_opam version =
 
   let normalize_tag tag =
     tag
@@ -42,20 +51,20 @@ let to_npm_version version =
     match parts with
     | major::[] ->
       let major = normalize_major_version_segment major in
-      major ^ ".0.0"
+      (major, "0", "0")
 
     | major::minor::[] ->
       let major = normalize_major_version_segment major in
       let minor = normalize_version_segment minor in
-      major ^ "." ^ minor ^ ".0"
+      (major, minor, "0")
 
     | major::minor::patch::[] ->
       let major = normalize_major_version_segment major in
       let minor = normalize_version_segment minor in
       let patch = normalize_version_segment patch in
-      major ^ "." ^ minor ^ "." ^ patch
+      (major, minor, patch)
     | _ ->
-      version
+      failwith "impossible"
   in
 
   let converted =
@@ -83,11 +92,23 @@ let to_npm_version version =
       let idx = Js.Re.index m in
       let tag = Js.String.substringToEnd ~from:idx version in
       let version = Js.String.substring ~from:0 ~to_:idx version in
-      let version = normalize_version ~has_v_prefix version in
+      let (major, minor, patch) = normalize_version ~has_v_prefix version in
       let tag = normalize_tag tag in
-      version ^ "-" ^ tag
+      (major, minor, patch, Some tag)
     | None ->
-      normalize_version ~has_v_prefix version
+      let (major, minor, patch) = normalize_version ~has_v_prefix version in
+      (major, minor, patch, None)
+
   in
 
   converted
+
+let render (version : t) =
+  match version with
+  | (major, minor, patch, Some tag) ->
+    major ^ "." ^ minor ^ "." ^ patch ^ "-" ^ tag
+  | (major, minor, patch, None) ->
+    major ^ "." ^ minor ^ "." ^ patch
+
+let opam_to_npm version =
+  render (of_opam version)

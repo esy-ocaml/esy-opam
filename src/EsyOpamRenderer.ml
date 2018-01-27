@@ -52,7 +52,7 @@ let to_npm_relop (op : OpamParserTypes.relop) =
 let rec render_filter ?(test_val=false) ?(build_val=false) (filter: OpamTypes.filter) =
   match filter with
   | OpamTypes.FBool enabled -> (enabled, "")
-  | OpamTypes.FString s -> (true, Version.to_npm_version s)
+  | OpamTypes.FString s -> (true, Version.opam_to_npm s)
   | OpamTypes.FIdent (_, name,_) ->
       let name = OpamVariable.to_string name in
       let enabled = match name with
@@ -88,7 +88,7 @@ let rec render_version_formula (formula : OpamFormula.version_formula) =
       | None -> ""
       | Some relop -> relop
       in
-      let version = version |> OpamPackage.Version.to_string |> Version.to_npm_version in
+      let version = version |> OpamPackage.Version.to_string |> Version.opam_to_npm in
       relop ^ version
   | OpamFormula.Block f -> render_version_formula f
   | OpamFormula.And (a, b) -> (render_version_formula a) ^ " " ^ (render_version_formula b)
@@ -315,15 +315,36 @@ let render_opam_build opam_name env (commands: OpamTypes.command list) =
 
 let render_opam_available (filter: OpamTypes.filter) =
   let rec find_constraints filter result =
+
+    let add_ocaml_constraint op  version =
+      let (major, minor, patch, tag) = Version.of_opam version in
+      (* This is how release ocaml compilers on npm - add trailing zeros to
+       * patch version to allow several revisions of a single OCaml compiler
+       * versions.
+       *)
+      let patch = match patch with | "0" -> "0" | v -> v ^ "000" in
+      let version = (major, minor, patch, tag) in
+      let npm_version = Version.render version in
+      match op, to_npm_relop op with
+      | `Eq, _ ->
+        (* Convert `Eq to ~ as we might have different revisions of ocaml on npm
+         * so that =4.03.3 means ~4.2.3000 which can match 4.2.3007
+         *)
+        let constr = "~" ^ npm_version in
+        Some constr
+      | _, Some op ->
+        let constr = op ^ npm_version in
+        Some constr
+      | _, None -> None
+    in
+
     match filter with
 
     | OpamTypes.FOp (OpamTypes.FIdent (_, var, _), op, OpamTypes.FString version) ->
       let var = OpamVariable.to_string var in
       if var == "ocaml-version" || var == "compiler" then
-        match to_npm_relop op with
-        | Some op ->
-          let constr = op ^ (Version.to_npm_version version) in
-          constr::result
+        match add_ocaml_constraint op version with
+        | Some constr -> constr::result
         | None -> result
       else
         result
@@ -349,7 +370,7 @@ let render_opam_available (filter: OpamTypes.filter) =
   | constraints -> Some (String.concat " " constraints)
 
 let render_opam ?installed_packages opam_name opam_version opam =
-  let version = Version.to_npm_version opam_version in
+  let version = Version.opam_to_npm opam_version in
   let env (var: OpamVariable.Full.t) =
     let variable = OpamVariable.Full.variable var in
     let scope = OpamVariable.Full.scope var in
