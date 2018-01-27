@@ -325,17 +325,19 @@ let render_opam_available (filter: OpamTypes.filter) =
       let patch = match patch with | "0" -> "0" | v -> v ^ "000" in
       let version = (major, minor, patch, tag) in
       let npm_version = Version.render version in
-      match op, to_npm_relop op with
-      | `Eq, _ ->
+      match op, to_npm_relop op, tag with
+      | `Eq, _, None ->
         (* Convert `Eq to ~ as we might have different revisions of ocaml on npm
-         * so that =4.03.3 means ~4.2.3000 which can match 4.2.3007
+         * so that =4.03.3 means ~4.2.3000 which can match 4.2.3007.
+         *
+         * Do it only if tag is not provided in a constraint!
          *)
         let constr = "~" ^ npm_version in
         Some constr
-      | _, Some op ->
+      | _, Some op, _ ->
         let constr = op ^ npm_version in
         Some constr
-      | _, None -> None
+      | _, None, _ -> None
     in
 
     match filter with
