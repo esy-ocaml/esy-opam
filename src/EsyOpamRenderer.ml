@@ -165,24 +165,28 @@ let expand_string ?(partial=false) ?default env text =
       | B b -> Some b
       | S s -> try Some (bool_of_string s) with Invalid_argument _ -> None
     in
-    let resolve name =
+    let resolve ?scopeNames name =
       let var = match name with
         | Some n -> OpamVariable.Full.create n var
         | None -> OpamVariable.Full.self var
       in
-      env var
+      env ?scopeNames var
     in
     let value_opt : variable_contents option = match packages with
-      | [] -> env (OpamVariable.Full.global var)
+      | [] -> env ?scopeNames:None (OpamVariable.Full.global var)
       | [name] -> resolve name
-      | names ->
-        List.fold_left (fun acc name ->
-            if acc = Some false then acc else
-              match resolve name with
-              | Some (B true) -> acc
-              | v -> v >>= bool_of_value)
-          (Some true) names
-        >>| fun b -> B b
+      | (name::_) as names ->
+        begin match resolve ~scopeNames:names name with
+        | Some v -> Some v
+        | None ->
+          List.fold_left (fun acc name ->
+              if acc = Some false then acc else
+                match resolve name with
+                | Some (B true) -> acc
+                | v -> v >>= bool_of_value)
+            (Some true) names
+          >>| fun b -> B b
+        end
     in
     match converter, no_undef_expand with
     | Some (iftrue, iffalse), false ->
@@ -265,12 +269,12 @@ let expand_string ?(partial=false) ?default env text =
     | None, true -> Some (Printf.sprintf "%%{%s}%%" fident)
     | Some df, true -> Some (Printf.sprintf "%%{%s}%%" (df fident))
   in
-  let env v =
+  let env ?scopeNames v =
     if partial then
-      match env v with
+      match env ?scopeNames v with
       | Some (S s) -> Some (S (escape_expansions s))
       | x -> x
-    else env v
+    else env ?scopeNames v
   in
   let f g =
     let str = Re.Group.get g 0 in
@@ -373,7 +377,8 @@ let render_opam_available (filter: OpamTypes.filter) =
 
 let render_opam ?installed_packages opam_name opam_version opam =
   let version = Version.opam_to_npm opam_version in
-  let env (var: OpamVariable.Full.t) =
+
+  let env ?scopeNames (var: OpamVariable.Full.t) =
     let variable = OpamVariable.Full.variable var in
     let scope = OpamVariable.Full.scope var in
     let name = OpamVariable.to_string variable in
@@ -383,62 +388,87 @@ let render_opam ?installed_packages opam_name opam_version opam =
       f = Some (OpamVariable.bool false) and
       s value = Some (OpamVariable.string value)
     in
-    let res = match (scope, name) with
 
-      | (OpamVariable.Full.Package name, var) ->
-        let envname = to_env_name (OpamPackage.Name.to_string name) in
-        let npmname = to_npm_name (OpamPackage.Name.to_string name) in
-        begin match var with
-          | "installed" ->
-            s ("${" ^ envname ^ "_installed:-false}")
-          | "enable" ->
-            s ("${" ^ envname ^ "_enable:-disable}")
-          | "version" ->
-            s ("${" ^ envname ^ "_version}")
-          | "bin" ->
-            s ("#{" ^ npmname ^ ".bin}")
-          | "share" ->
-            s ("#{" ^ npmname ^ ".share}")
-          | "lib" ->
-            s ("#{" ^ npmname ^ ".lib}")
-          | _ ->
-            s ""
-        end
+    let genInstalledCond scopeNames =
+      scopeNames
+      |> List.map (fun name ->
+          match name with
+          | Some name ->
+            let name = OpamPackage.Name.to_string name in
+            let npmname = to_npm_name name in
+            {j|$npmname.installed|j}
+          | None -> "self.installed")
+      |> String.concat " && "
+    in
 
-      | (OpamVariable.Full.Global, "ocaml-native") -> t
-      | (OpamVariable.Full.Global, "ocaml-native-dynlink") -> t
-      | (OpamVariable.Full.Global, "make") -> s "make"
-      | (OpamVariable.Full.Global, "jobs") -> s "4"
-      | (OpamVariable.Full.Global, "user") -> s "$USER"
-      | (OpamVariable.Full.Global, "group") -> s "$USER"
-      | (OpamVariable.Full.Global, "pinned") -> f
+    match scopeNames, name with
+    | Some scopeNames, "installed" ->
+      let cond = genInstalledCond scopeNames in
+      s {j|#{ $cond ? 'true' : 'false'}|j}
+    | Some scopeNames, "enable" ->
+      let cond = genInstalledCond scopeNames in
+      s {j|#{ $cond ? 'enable' : 'disable'}|j}
 
-      (** TODO: Is Self/Global correct here? Not sure if we need to duplicate them *)
-      | (OpamVariable.Full.Self, "name") -> s opam_name
-      | (OpamVariable.Full.Global, "name") -> s opam_name
-      | (OpamVariable.Full.Self, "build") -> s "$cur__target_dir"
-      | (OpamVariable.Full.Global, "build") -> s "$cur__target_dir"
-      | (OpamVariable.Full.Self, "bin") -> s "$cur__bin"
-      | (OpamVariable.Full.Global, "bin") -> s "$cur__bin"
-      | (OpamVariable.Full.Self, "prefix") -> s "$cur__install"
-      | (OpamVariable.Full.Global, "prefix") -> s "$cur__install"
-      | (OpamVariable.Full.Self, "lib") -> s "$cur__lib"
-      | (OpamVariable.Full.Global, "lib") -> s "$cur__lib"
-      | (OpamVariable.Full.Self, "stublibs") -> s "$cur__lib/stublibs"
-      | (OpamVariable.Full.Global, "stublibs") -> s "$cur__lib/stublibs"
-      | (OpamVariable.Full.Self, "etc") -> s "$cur__etc"
-      | (OpamVariable.Full.Global, "etc") -> s "$cur__etc"
-      | (OpamVariable.Full.Self, "sbin") -> s "$cur__sbin"
-      | (OpamVariable.Full.Global, "sbin") -> s "$cur__sbin"
-      | (OpamVariable.Full.Self, "doc") -> s "$cur__doc"
-      | (OpamVariable.Full.Global, "doc") -> s "$cur__doc"
-      | (OpamVariable.Full.Self, "man") -> s "$cur__man"
-      | (OpamVariable.Full.Global, "man") -> s "$cur__man"
-      | (OpamVariable.Full.Self, "share") -> s "$cur__share"
-      | (OpamVariable.Full.Global, "share") -> s "$cur__share"
+    | Some _, _ ->
+      None
 
-      | (_, _name) -> None
-    in res
+    | None, _ -> begin
+      match (scope, name) with
+
+        | (OpamVariable.Full.Package name, var) ->
+          let envname = to_env_name (OpamPackage.Name.to_string name) in
+          let npmname = to_npm_name (OpamPackage.Name.to_string name) in
+          begin match var with
+            | "installed" ->
+              s {j|#{ $npmname.installed ? 'true' : 'false'}|j}
+            | "enable" ->
+              s {j|#{ $npmname.installed ? 'enable' : 'disable'}|j}
+            | "version" ->
+              s ("${" ^ envname ^ "_version}")
+            | "bin" ->
+              s ("#{" ^ npmname ^ ".bin}")
+            | "share" ->
+              s ("#{" ^ npmname ^ ".share}")
+            | "lib" ->
+              s ("#{" ^ npmname ^ ".lib}")
+            | _ ->
+              s ""
+          end
+
+        | (OpamVariable.Full.Global, "ocaml-native") -> t
+        | (OpamVariable.Full.Global, "ocaml-native-dynlink") -> t
+        | (OpamVariable.Full.Global, "make") -> s "make"
+        | (OpamVariable.Full.Global, "jobs") -> s "4"
+        | (OpamVariable.Full.Global, "user") -> s "$USER"
+        | (OpamVariable.Full.Global, "group") -> s "$USER"
+        | (OpamVariable.Full.Global, "pinned") -> f
+
+        (** TODO: Is Self/Global correct here? Not sure if we need to duplicate them *)
+        | (OpamVariable.Full.Self, "name") -> s opam_name
+        | (OpamVariable.Full.Global, "name") -> s opam_name
+        | (OpamVariable.Full.Self, "build") -> s "$cur__target_dir"
+        | (OpamVariable.Full.Global, "build") -> s "$cur__target_dir"
+        | (OpamVariable.Full.Self, "bin") -> s "$cur__bin"
+        | (OpamVariable.Full.Global, "bin") -> s "$cur__bin"
+        | (OpamVariable.Full.Self, "prefix") -> s "$cur__install"
+        | (OpamVariable.Full.Global, "prefix") -> s "$cur__install"
+        | (OpamVariable.Full.Self, "lib") -> s "$cur__lib"
+        | (OpamVariable.Full.Global, "lib") -> s "$cur__lib"
+        | (OpamVariable.Full.Self, "stublibs") -> s "$cur__lib/stublibs"
+        | (OpamVariable.Full.Global, "stublibs") -> s "$cur__lib/stublibs"
+        | (OpamVariable.Full.Self, "etc") -> s "$cur__etc"
+        | (OpamVariable.Full.Global, "etc") -> s "$cur__etc"
+        | (OpamVariable.Full.Self, "sbin") -> s "$cur__sbin"
+        | (OpamVariable.Full.Global, "sbin") -> s "$cur__sbin"
+        | (OpamVariable.Full.Self, "doc") -> s "$cur__doc"
+        | (OpamVariable.Full.Global, "doc") -> s "$cur__doc"
+        | (OpamVariable.Full.Self, "man") -> s "$cur__man"
+        | (OpamVariable.Full.Global, "man") -> s "$cur__man"
+        | (OpamVariable.Full.Self, "share") -> s "$cur__share"
+        | (OpamVariable.Full.Global, "share") -> s "$cur__share"
+
+        | (_, _name) -> None
+      end
   in
 
   let ocaml_version_constaint = render_opam_available (OpamFile.OPAM.available opam) in
