@@ -6,15 +6,9 @@ module Lib = EsyOpamLib
 let fixup pkg =
   let open EsyOpamRenderer in
 
-  let opam_install = ["sh"; "-c"; "(esy-installer || true)"] in
-
   let subst_dependency =
     ("@esy-ocaml/substs", "^0.0.1")
   in
-  let opam_installer_dependency =
-    ("@esy-ocaml/esy-installer", "^0.0.0")
-  in
-
   let fixup_dependencies pkg =
     let exclude_dependencies = Lib.StringSet.of_list [
         "@opam/base-no-ppx";
@@ -40,7 +34,7 @@ let fixup pkg =
       |> List.filter (is_not_excluded_with exclude_optional_dependencies)
     in
     let dependencies =
-      subst_dependency::opam_installer_dependency::pkg.dependencies
+      subst_dependency::pkg.dependencies
       |> List.filter (is_not_excluded_with exclude_dependencies)
     in
     { pkg with dependencies; optional_dependencies; }
@@ -54,15 +48,9 @@ let fixup pkg =
       { pkg with build = substs @ pkg.build }
   in
 
-  let fixup_install pkg =
-    { pkg with
-      install = List.concat [pkg.install; [opam_install]] }
-  in
-
   pkg
   |> fixup_dependencies
   |> fixup_build
-  |> fixup_install
 
 
 let parse_opam data =
